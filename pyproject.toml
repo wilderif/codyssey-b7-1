@@ -5,6 +5,7 @@ description = "FastAPI modular monolith chatbot"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",
+    "pydantic-settings",
     "uvicorn",
     "jinja2",
     "sqlalchemy",
