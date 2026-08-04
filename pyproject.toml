@@ -1,0 +1,13 @@
+[project]
+name = "codyssey-b7-1"
+version = "0.1.0"
+description = "FastAPI modular monolith chatbot"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "sqlalchemy",
+    "openai",
+    "python-multipart",
+]
