@@ -32,6 +32,15 @@
 | `error_message` | Text | Nullable, 안전한 내부 요약만 저장 |
 | `created_at` | DateTime | Not Null, UTC |
 
+## 상태 불변식
+
+| status | answer | error_message |
+| --- | --- | --- |
+| `success` | Not Null | Null |
+| `failed` | Null | Not Null |
+
+DB schema는 `CheckConstraint`로 status 값과 위 field 조합을 함께 강제합니다.
+
 ## 문맥 조회
 
 DB에서는 login 사용자의 성공 record만 최신순으로 최대 5개 조회합니다.
@@ -41,11 +50,12 @@ SELECT id, question, answer, created_at
 FROM conversations
 WHERE user_id = :user_id
   AND status = 'success'
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 5;
 ```
 
 application에서 결과를 오래된 순서로 뒤집어 OpenAI에 전달합니다.
+동일한 `created_at`에서는 `id DESC`를 결정적인 tie-breaker로 사용합니다.
 
 ## 저장 정책
 
@@ -97,11 +107,11 @@ sqlite3 data/chatbot.db
 SELECT id, username, created_at FROM users ORDER BY id;
 SELECT id, user_id, question, answer, status, created_at
 FROM conversations
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, id DESC;
 SELECT id, user_id, answer, status, error_message, created_at
 FROM conversations
 WHERE status = 'failed'
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, id DESC;
 SELECT user_id, COUNT(*) AS count
 FROM conversations
 GROUP BY user_id
@@ -126,7 +136,7 @@ conn.row_factory = sqlite3.Row
 
 for row in conn.execute(
     "SELECT id, user_id, question, answer, status, created_at "
-    "FROM conversations ORDER BY created_at DESC"
+    "FROM conversations ORDER BY created_at DESC, id DESC"
 ):
     print(dict(row))
 
