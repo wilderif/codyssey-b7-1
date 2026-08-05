@@ -12,3 +12,9 @@ dependencies = [
     "openai",
     "python-multipart",
 ]
+
+[dependency-groups]
+dev = [
+    "pyright",
+    "ruff",
+]
