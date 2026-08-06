@@ -89,18 +89,23 @@ Content-Type: application/json
 
 ## 문맥·OpenAI 처리
 
-1. login 사용자 ID로 `status=success` record만 `created_at DESC` 최대 5개 조회합니다.
-2. 다른 사용자의 기록과 `failed` 기록은 제외합니다.
-3. 조회한 5개를 오래된 순서로 뒤집습니다.
-4. 각 과거 `question`은 `user`, `answer`는 `assistant` message로 변환합니다.
+1. Chat 내부 단일 system prompt `You are a helpful assistant. Answer clearly and concisely in the user's language.`를 첫 `system` message로 추가합니다.
+2. login 사용자 ID로 `status=success` record만 `created_at DESC` 최대 5개 조회합니다.
+3. 다른 사용자의 기록과 `failed` 기록은 제외합니다.
+4. 조회한 5개를 오래된 순서로 뒤집고, 각 과거 `question`은 `user`, `answer`는
+   `assistant` message로 변환합니다.
 5. 현재 질문을 마지막 `user` message로 추가합니다.
-6. `OPENAI_TIMEOUT_SECONDS=30`을 적용하고 초기 버전에서는 자동 재시도하지 않습니다.
+6. `settings.openai_model`과 `OPENAI_TIMEOUT_SECONDS=30`을 적용합니다.
+7. 자동 재시도는 `0회`이며 요청당 OpenAI 호출은 정확히 한 번입니다.
+8. timeout·API 오류·비정상 response에는 대체 답변을 만들지 않고 실패 record를 저장한 뒤
+   오류 응답으로 변환합니다.
 
 ## 저장과 오류 우선순위
 
 - 성공: 질문·답변·`status=success`·UTC 시각 저장 후 `200`
 - OpenAI 오류: 질문·`answer=null`·`status=failed`·안전한 내부 요약·UTC 시각 저장 후 `502`
 - OpenAI 시간 초과: 같은 실패 기록 저장 후 `504`
+- OpenAI 비정상 response: 같은 실패 기록 저장 후 `502`
 - 위 성공 또는 실패 기록의 **DB 저장 자체가 실패**하면 기록을 남길 수 없으므로 server log에 `db_save_failed`만 기록하고 `500` 반환
 - 내부 `error_message`, SQL 오류, stack, 비밀정보는 사용자 응답과 template에 포함하지 않음
 
