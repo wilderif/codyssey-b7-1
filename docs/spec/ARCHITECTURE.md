@@ -52,6 +52,14 @@ app/
 - SQLAlchemy `Base`와 DB session은 `app/core/database.py`에서만 생성하고 다른 module은 import해서 사용합니다.
 - `app/ui`는 OpenAI를 직접 호출하거나 DB 쓰기 규칙을 중복 구현하지 않습니다.
 - `app/chat`은 `app/auth`가 제공한 login 사용자 ID를 사용하고 다른 사용자의 record를 조회하지 않습니다.
+- `app/chat/service.py`는 `ChatExchangeRepository` Protocol에 의존하고, production에서는
+  `SqlAlchemyChatExchangeRepository`를 조립해 사용합니다.
+- Repository는 query·flush만 수행하고, ChatExchange 저장의 `commit()`·`rollback()`은
+  Chat Service가 소유합니다.
+- Chat Service는 최근 문맥을 plain message로 변환한 뒤 read transaction을 종료하고
+  OpenAI 응답을 기다립니다. 성공·실패 record 저장은 별도 write transaction으로 처리합니다.
+- OpenAI adapter가 변환한 `ChatGenerationError`만 AI 실패 record로 저장합니다. 예상하지
+  못한 exception은 API layer가 `500`으로 처리할 수 있도록 변환하지 않습니다.
 - `app/main.py` router 등록 변경은 관련 담당자가 병합하거나 사전 합의합니다.
 - HTTP 동작은 [API 계약](api/API.md), DB field는 [DB schema 계약](db/DB.md)을 기준으로 삼습니다.
 
@@ -60,17 +68,20 @@ app/
 1. session cookie에서 login 사용자 ID 확인
 2. JSON 형식과 질문 길이 검증
 3. 해당 사용자의 `status=success` 기록을 최신순으로 최대 5개 조회
-4. 조회 결과를 오래된 순으로 뒤집어 과거 `question → user`, `answer → assistant` message로 변환
+4. Chat 내부 단일 system prompt 뒤에 조회 결과를 오래된 순으로 `question → user`,
+   `answer → assistant` message로 변환
 5. 현재 질문을 마지막 `user` message로 추가
-6. OpenAI를 30초 제한으로 한 번 호출
-7. 성공 또는 AI 실패 기록을 SQLite에 저장
+6. `settings.openai_model`로 OpenAI를 30초 제한, 자동 retry 없이 한 번 호출
+7. 성공 또는 안전한 오류 code만 담은 AI 실패 record를 SQLite에 저장
 8. JSON 응답을 반환하고 UI가 결과를 표시
 
 ## 핵심 제약
 
 - 사용자마다 하나의 연속 chat만 제공
 - 새 chat·대화방 선택·대화방 목록 없음
-- `conversations` 한 record는 질문과 답변 한 쌍
+- `chat_exchanges` 한 record는 질문과 답변 한 쌍
 - 다른 사용자의 기록과 실패 기록은 AI 문맥에서 제외
 - 초기 버전은 OpenAI 자동 재시도 없음
+- timeout·API 오류·비정상 OpenAI response에는 생성된 대체 답변을 사용하지 않고 실패
+  record를 저장한 뒤 API layer가 오류 응답으로 변환
 - table 생성은 `Base.metadata.create_all()`, Alembic은 사용하지 않음

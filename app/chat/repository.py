@@ -1,84 +1,177 @@
-"""Conversation persistence repository다."""
+"""ChatExchange persistence repository다."""
 
 from __future__ import annotations
+
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.chat.models import Conversation
+from app.chat.models import ChatExchange
 
 
-def create_success_conversation(
+class ChatExchangeRepository(Protocol):
+    """Chat Service가 사용하는 ChatExchange persistence 계약이다."""
+
+    def create_success_exchange(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        answer: str,
+    ) -> ChatExchange:
+        """성공 ChatExchange를 flush한다."""
+
+        ...
+
+    def create_failed_exchange(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        error_message: str,
+    ) -> ChatExchange:
+        """실패 ChatExchange를 flush한다."""
+
+        ...
+
+    def get_recent_success_exchanges(
+        self,
+        *,
+        user_id: int,
+        limit: int = 5,
+    ) -> list[ChatExchange]:
+        """사용자의 최근 성공 ChatExchange를 반환한다."""
+
+        ...
+
+    def list_user_exchanges(self, *, user_id: int) -> list[ChatExchange]:
+        """사용자의 전체 ChatExchange history를 반환한다."""
+
+        ...
+
+
+class SqlAlchemyChatExchangeRepository:
+    """SQLAlchemy Session을 사용하는 ChatExchangeRepository 구현체다."""
+
+    def __init__(self, *, db: Session) -> None:
+        self._db = db
+
+    def create_success_exchange(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        answer: str,
+    ) -> ChatExchange:
+        return create_success_exchange(
+            db=self._db,
+            user_id=user_id,
+            question=question,
+            answer=answer,
+        )
+
+    def create_failed_exchange(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        error_message: str,
+    ) -> ChatExchange:
+        return create_failed_exchange(
+            db=self._db,
+            user_id=user_id,
+            question=question,
+            error_message=error_message,
+        )
+
+    def get_recent_success_exchanges(
+        self,
+        *,
+        user_id: int,
+        limit: int = 5,
+    ) -> list[ChatExchange]:
+        return get_recent_success_exchanges(
+            db=self._db,
+            user_id=user_id,
+            limit=limit,
+        )
+
+    def list_user_exchanges(self, *, user_id: int) -> list[ChatExchange]:
+        return list_user_exchanges(db=self._db, user_id=user_id)
+
+
+def create_success_exchange(
     *,
     db: Session,
     user_id: int,
     question: str,
     answer: str,
-) -> Conversation:
-    """성공한 질문 처리 결과를 flush한다."""
+) -> ChatExchange:
+    """성공한 질문·답변 쌍을 flush한다."""
 
-    conversation = Conversation(
+    exchange = ChatExchange(
         user_id=user_id,
         question=question,
         answer=answer,
         status="success",
         error_message=None,
     )
-    db.add(conversation)
+    db.add(exchange)
     db.flush()
-    return conversation
+    return exchange
 
 
-def create_failed_conversation(
+def create_failed_exchange(
     *,
     db: Session,
     user_id: int,
     question: str,
     error_message: str,
-) -> Conversation:
-    """실패한 질문 처리 결과를 flush한다."""
+) -> ChatExchange:
+    """실패한 질문·답변 쌍을 flush한다."""
 
-    conversation = Conversation(
+    exchange = ChatExchange(
         user_id=user_id,
         question=question,
         answer=None,
         status="failed",
         error_message=error_message,
     )
-    db.add(conversation)
+    db.add(exchange)
     db.flush()
-    return conversation
+    return exchange
 
 
-def get_recent_success_conversations(
+def get_recent_success_exchanges(
     *,
     db: Session,
     user_id: int,
     limit: int = 5,
-) -> list[Conversation]:
-    """사용자의 최근 성공 Conversation을 반환한다."""
+) -> list[ChatExchange]:
+    """사용자의 최근 성공 ChatExchange를 반환한다."""
 
     if not 1 <= limit <= 5:
         raise ValueError("limit must be between 1 and 5")
 
     statement = (
-        select(Conversation)
+        select(ChatExchange)
         .where(
-            Conversation.user_id == user_id,
-            Conversation.status == "success",
+            ChatExchange.user_id == user_id,
+            ChatExchange.status == "success",
         )
-        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+        .order_by(ChatExchange.created_at.desc(), ChatExchange.id.desc())
         .limit(limit)
     )
     return list(db.scalars(statement))
 
 
-def list_user_conversations(*, db: Session, user_id: int) -> list[Conversation]:
-    """사용자의 전체 Conversation history를 반환한다."""
+def list_user_exchanges(*, db: Session, user_id: int) -> list[ChatExchange]:
+    """사용자의 전체 ChatExchange history를 반환한다."""
 
     statement = (
-        select(Conversation)
-        .where(Conversation.user_id == user_id)
-        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+        select(ChatExchange)
+        .where(ChatExchange.user_id == user_id)
+        .order_by(ChatExchange.created_at.desc(), ChatExchange.id.desc())
     )
     return list(db.scalars(statement))
