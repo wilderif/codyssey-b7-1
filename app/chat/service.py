@@ -14,6 +14,7 @@ from app.chat.errors import (
     ChatGenerationError,
     ChatPersistenceError,
     ChatValidationError,
+    ChatValidationReason,
 )
 from app.chat.models import ChatExchange
 from app.chat.openai_client import (
@@ -86,6 +87,7 @@ class ChatService:
                 exchanges=exchanges,
                 current_question=question,
             )
+            self._db.rollback()
         except Exception as error:
             self._db.rollback()
             raise ChatPersistenceError() from error
@@ -99,14 +101,6 @@ class ChatService:
                 error_message=error.record_message,
             )
             raise
-        except Exception as error:
-            generation_error = ChatGenerationError()
-            self._save_failed_exchange(
-                user_id=user_id,
-                question=question,
-                error_message=generation_error.record_message,
-            )
-            raise generation_error from error
 
         try:
             exchange = self._repository.create_success_exchange(
@@ -114,16 +108,17 @@ class ChatService:
                 question=question,
                 answer=answer,
             )
+            result = ChatResult(
+                chat_exchange_id=exchange.id,
+                answer=answer,
+                created_at=exchange.created_at,
+            )
             self._db.commit()
         except Exception as error:
             self._db.rollback()
             raise ChatPersistenceError() from error
 
-        return ChatResult(
-            chat_exchange_id=exchange.id,
-            answer=answer,
-            created_at=exchange.created_at,
-        )
+        return result
 
     def _save_failed_exchange(
         self,
@@ -147,6 +142,7 @@ class ChatService:
 async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
+    normalized_message = _normalize_message(message)
     repository = SqlAlchemyChatExchangeRepository(db=db)
     async with create_openai_client() as client:
         service = ChatService(
@@ -157,7 +153,7 @@ async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult
                 model=get_openai_model(),
             ),
         )
-        return await service.process_chat(user_id=user_id, message=message)
+        return await service.process_chat(user_id=user_id, message=normalized_message)
 
 
 def list_chat_exchange_history(
@@ -180,9 +176,9 @@ def list_chat_exchange_history(
 def _normalize_message(message: str) -> str:
     normalized = message.strip()
     if not normalized:
-        raise ChatValidationError()
+        raise ChatValidationError(ChatValidationReason.EMPTY_MESSAGE)
     if len(normalized) > MAX_MESSAGE_LENGTH:
-        raise ChatValidationError()
+        raise ChatValidationError(ChatValidationReason.MESSAGE_TOO_LONG)
     return normalized
 
 

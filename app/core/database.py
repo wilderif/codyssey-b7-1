@@ -19,9 +19,7 @@ class Base(DeclarativeBase):
 
 _database_url = make_url(settings.database_url)
 _connect_args = (
-    {"check_same_thread": False}
-    if _database_url.get_backend_name() == "sqlite"
-    else {}
+    {"check_same_thread": False} if _database_url.get_backend_name() == "sqlite" else {}
 )
 
 engine = create_engine(_database_url, connect_args=_connect_args)

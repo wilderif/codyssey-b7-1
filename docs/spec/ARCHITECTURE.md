@@ -56,6 +56,10 @@ app/
   `SqlAlchemyChatExchangeRepository`를 조립해 사용합니다.
 - Repository는 query·flush만 수행하고, ChatExchange 저장의 `commit()`·`rollback()`은
   Chat Service가 소유합니다.
+- Chat Service는 최근 문맥을 plain message로 변환한 뒤 read transaction을 종료하고
+  OpenAI 응답을 기다립니다. 성공·실패 record 저장은 별도 write transaction으로 처리합니다.
+- OpenAI adapter가 변환한 `ChatGenerationError`만 AI 실패 record로 저장합니다. 예상하지
+  못한 exception은 API layer가 `500`으로 처리할 수 있도록 변환하지 않습니다.
 - `app/main.py` router 등록 변경은 관련 담당자가 병합하거나 사전 합의합니다.
 - HTTP 동작은 [API 계약](api/API.md), DB field는 [DB schema 계약](db/DB.md)을 기준으로 삼습니다.
 

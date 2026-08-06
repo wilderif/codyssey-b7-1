@@ -106,6 +106,7 @@ Content-Type: application/json
 - OpenAI 오류: 질문·`answer=null`·`status=failed`·안전한 내부 요약·UTC 시각 저장 후 `502`
 - OpenAI 시간 초과: 같은 실패 기록 저장 후 `504`
 - OpenAI 비정상 response: 같은 실패 기록 저장 후 `502`
+- 예상하지 못한 server 오류: AI 실패로 분류하거나 실패 record를 만들지 않고 `500`
 - 위 성공 또는 실패 기록의 **DB 저장 자체가 실패**하면 기록을 남길 수 없으므로 server log에 `db_save_failed`만 기록하고 `500` 반환
 - 내부 `error_message`, SQL 오류, stack, 비밀정보는 사용자 응답과 template에 포함하지 않음
 
