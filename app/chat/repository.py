@@ -2,10 +2,103 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.chat.models import Conversation
+
+
+class ConversationRepository(Protocol):
+    """Chat Service가 사용하는 Conversation persistence 계약이다."""
+
+    def create_success_conversation(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        answer: str,
+    ) -> Conversation:
+        """성공 Conversation을 flush한다."""
+
+        ...
+
+    def create_failed_conversation(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        error_message: str,
+    ) -> Conversation:
+        """실패 Conversation을 flush한다."""
+
+        ...
+
+    def get_recent_success_conversations(
+        self,
+        *,
+        user_id: int,
+        limit: int = 5,
+    ) -> list[Conversation]:
+        """사용자의 최근 성공 Conversation을 반환한다."""
+
+        ...
+
+    def list_user_conversations(self, *, user_id: int) -> list[Conversation]:
+        """사용자의 전체 Conversation history를 반환한다."""
+
+        ...
+
+
+class SqlAlchemyConversationRepository:
+    """SQLAlchemy Session을 사용하는 ConversationRepository 구현체다."""
+
+    def __init__(self, *, db: Session) -> None:
+        self._db = db
+
+    def create_success_conversation(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        answer: str,
+    ) -> Conversation:
+        return create_success_conversation(
+            db=self._db,
+            user_id=user_id,
+            question=question,
+            answer=answer,
+        )
+
+    def create_failed_conversation(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        error_message: str,
+    ) -> Conversation:
+        return create_failed_conversation(
+            db=self._db,
+            user_id=user_id,
+            question=question,
+            error_message=error_message,
+        )
+
+    def get_recent_success_conversations(
+        self,
+        *,
+        user_id: int,
+        limit: int = 5,
+    ) -> list[Conversation]:
+        return get_recent_success_conversations(
+            db=self._db,
+            user_id=user_id,
+            limit=limit,
+        )
+
+    def list_user_conversations(self, *, user_id: int) -> list[Conversation]:
+        return list_user_conversations(db=self._db, user_id=user_id)
 
 
 def create_success_conversation(
