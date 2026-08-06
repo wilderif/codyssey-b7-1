@@ -52,9 +52,9 @@ app/
 - SQLAlchemy `Base`와 DB session은 `app/core/database.py`에서만 생성하고 다른 module은 import해서 사용합니다.
 - `app/ui`는 OpenAI를 직접 호출하거나 DB 쓰기 규칙을 중복 구현하지 않습니다.
 - `app/chat`은 `app/auth`가 제공한 login 사용자 ID를 사용하고 다른 사용자의 record를 조회하지 않습니다.
-- `app/chat/service.py`는 `ConversationRepository` Protocol에 의존하고, production에서는
-  `SqlAlchemyConversationRepository`를 조립해 사용합니다.
-- Repository는 query·flush만 수행하고, Conversation 저장의 `commit()`·`rollback()`은
+- `app/chat/service.py`는 `ChatExchangeRepository` Protocol에 의존하고, production에서는
+  `SqlAlchemyChatExchangeRepository`를 조립해 사용합니다.
+- Repository는 query·flush만 수행하고, ChatExchange 저장의 `commit()`·`rollback()`은
   Chat Service가 소유합니다.
 - `app/main.py` router 등록 변경은 관련 담당자가 병합하거나 사전 합의합니다.
 - HTTP 동작은 [API 계약](api/API.md), DB field는 [DB schema 계약](db/DB.md)을 기준으로 삼습니다.
@@ -75,7 +75,7 @@ app/
 
 - 사용자마다 하나의 연속 chat만 제공
 - 새 chat·대화방 선택·대화방 목록 없음
-- `conversations` 한 record는 질문과 답변 한 쌍
+- `chat_exchanges` 한 record는 질문과 답변 한 쌍
 - 다른 사용자의 기록과 실패 기록은 AI 문맥에서 제외
 - 초기 버전은 OpenAI 자동 재시도 없음
 - timeout·API 오류·비정상 OpenAI response에는 생성된 대체 답변을 사용하지 않고 실패

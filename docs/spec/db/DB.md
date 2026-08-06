@@ -5,9 +5,9 @@
 
 ## Model 원칙
 
-- `users 1 : N conversations`
-- `conversations` 한 record는 사용자 질문과 AI 답변 한 쌍입니다.
-- 사용자별 하나의 연속 chat만 제공하므로 conversation/message table을 분리하지 않습니다.
+- `users 1 : N chat_exchanges`
+- `chat_exchanges` 한 record는 사용자 질문과 AI 답변 한 쌍입니다.
+- 사용자별 하나의 연속 chat만 제공하므로 chat session/message table을 분리하지 않습니다.
 - 초기 table 생성은 `Base.metadata.create_all()`을 사용하고 Alembic은 도입하지 않습니다.
 - SQLAlchemy `Base`와 DB session은 `app/core/database.py`에서 제공하며 다른 module은 import해서 사용합니다.
 
@@ -20,11 +20,11 @@
 | `password_hash` | String | Not Null |
 | `created_at` | DateTime | Not Null, UTC |
 
-## `conversations`
+## `chat_exchanges`
 
 | Field | Type | 조건 |
 | --- | --- | --- |
-| `id` | Integer | PK. API의 `conversation_id` |
+| `id` | Integer | PK. API의 `chat_exchange_id` |
 | `user_id` | Integer | FK → `users.id`, Not Null |
 | `question` | Text | Not Null |
 | `answer` | Text | 성공 시 답변, 실패 시 Null 가능 |
@@ -47,7 +47,7 @@ DB에서는 login 사용자의 성공 record만 최신순으로 최대 5개 조�
 
 ```sql
 SELECT id, question, answer, created_at
-FROM conversations
+FROM chat_exchanges
 WHERE user_id = :user_id
   AND status = 'success'
 ORDER BY created_at DESC, id DESC
@@ -106,21 +106,21 @@ sqlite3 data/chatbot.db
 .mode column
 SELECT id, username, created_at FROM users ORDER BY id;
 SELECT id, user_id, question, answer, status, created_at
-FROM conversations
+FROM chat_exchanges
 ORDER BY created_at DESC, id DESC;
 SELECT id, user_id, answer, status, error_message, created_at
-FROM conversations
+FROM chat_exchanges
 WHERE status = 'failed'
 ORDER BY created_at DESC, id DESC;
 SELECT user_id, COUNT(*) AS count
-FROM conversations
+FROM chat_exchanges
 GROUP BY user_id
 ORDER BY user_id;
 ```
 
 확인 항목:
 
-- `conversations.user_id`가 login 사용자 `users.id`와 연결됨
+- `chat_exchanges.user_id`가 login 사용자 `users.id`와 연결됨
 - 성공 기록에 질문·답변·UTC 생성 시각이 존재함
 - 실패 기록은 `answer IS NULL`, `status='failed'`
 - 사용자별 조회 결과가 서로 섞이지 않음
@@ -136,7 +136,7 @@ conn.row_factory = sqlite3.Row
 
 for row in conn.execute(
     "SELECT id, user_id, question, answer, status, created_at "
-    "FROM conversations ORDER BY created_at DESC, id DESC"
+    "FROM chat_exchanges ORDER BY created_at DESC, id DESC"
 ):
     print(dict(row))
 

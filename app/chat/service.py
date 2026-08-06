@@ -1,4 +1,4 @@
-"""Chat use case와 Conversation transaction을 처리한다."""
+"""Chat use case와 ChatExchange transaction을 처리한다."""
 
 from __future__ import annotations
 
@@ -15,13 +15,16 @@ from app.chat.errors import (
     ChatPersistenceError,
     ChatValidationError,
 )
-from app.chat.models import Conversation
+from app.chat.models import ChatExchange
 from app.chat.openai_client import (
     OpenAIAnswerGenerator,
     create_openai_client,
     get_openai_model,
 )
-from app.chat.repository import ConversationRepository, SqlAlchemyConversationRepository
+from app.chat.repository import (
+    ChatExchangeRepository,
+    SqlAlchemyChatExchangeRepository,
+)
 
 CONTEXT_HISTORY_LIMIT = 5
 MAX_MESSAGE_LENGTH = 1000
@@ -40,16 +43,16 @@ class AnswerGenerator(Protocol):
 class ChatResult:
     """성공적으로 저장된 Chat 처리 결과다."""
 
-    conversation_id: int
+    chat_exchange_id: int
     answer: str
     created_at: datetime
 
 
 @dataclass(frozen=True)
-class ConversationHistoryItem:
-    """사용자 화면에 안전하게 전달할 Conversation history 항목이다."""
+class ChatExchangeHistoryItem:
+    """사용자 화면에 안전하게 전달할 ChatExchange history 항목이다."""
 
-    conversation_id: int
+    chat_exchange_id: int
     question: str
     answer: str | None
     status: str
@@ -57,13 +60,13 @@ class ConversationHistoryItem:
 
 
 class ChatService:
-    """질문 처리, answer 생성, Conversation 저장을 하나의 use case로 묶는다."""
+    """질문 처리, answer 생성, ChatExchange 저장을 하나의 use case로 묶는다."""
 
     def __init__(
         self,
         *,
         db: Session,
-        repository: ConversationRepository,
+        repository: ChatExchangeRepository,
         answer_generator: AnswerGenerator,
     ) -> None:
         self._db = db
@@ -71,16 +74,16 @@ class ChatService:
         self._answer_generator = answer_generator
 
     async def process_chat(self, *, user_id: int, message: str) -> ChatResult:
-        """질문을 처리하고 성공·실패 Conversation transaction을 완료한다."""
+        """질문을 처리하고 성공·실패 ChatExchange transaction을 완료한다."""
 
         question = _normalize_message(message)
         try:
-            conversations = self._repository.get_recent_success_conversations(
+            exchanges = self._repository.get_recent_success_exchanges(
                 user_id=user_id,
                 limit=CONTEXT_HISTORY_LIMIT,
             )
             messages = build_context_messages(
-                conversations=conversations,
+                exchanges=exchanges,
                 current_question=question,
             )
         except Exception as error:
@@ -90,7 +93,7 @@ class ChatService:
         try:
             answer = await self._answer_generator.generate(messages=messages)
         except ChatGenerationError as error:
-            self._save_failed_conversation(
+            self._save_failed_exchange(
                 user_id=user_id,
                 question=question,
                 error_message=error.record_message,
@@ -98,7 +101,7 @@ class ChatService:
             raise
         except Exception as error:
             generation_error = ChatGenerationError()
-            self._save_failed_conversation(
+            self._save_failed_exchange(
                 user_id=user_id,
                 question=question,
                 error_message=generation_error.record_message,
@@ -106,7 +109,7 @@ class ChatService:
             raise generation_error from error
 
         try:
-            conversation = self._repository.create_success_conversation(
+            exchange = self._repository.create_success_exchange(
                 user_id=user_id,
                 question=question,
                 answer=answer,
@@ -117,12 +120,12 @@ class ChatService:
             raise ChatPersistenceError() from error
 
         return ChatResult(
-            conversation_id=conversation.id,
+            chat_exchange_id=exchange.id,
             answer=answer,
-            created_at=conversation.created_at,
+            created_at=exchange.created_at,
         )
 
-    def _save_failed_conversation(
+    def _save_failed_exchange(
         self,
         *,
         user_id: int,
@@ -130,7 +133,7 @@ class ChatService:
         error_message: str,
     ) -> None:
         try:
-            self._repository.create_failed_conversation(
+            self._repository.create_failed_exchange(
                 user_id=user_id,
                 question=question,
                 error_message=error_message,
@@ -144,7 +147,7 @@ class ChatService:
 async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
-    repository = SqlAlchemyConversationRepository(db=db)
+    repository = SqlAlchemyChatExchangeRepository(db=db)
     async with create_openai_client() as client:
         service = ChatService(
             db=db,
@@ -157,21 +160,21 @@ async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult
         return await service.process_chat(user_id=user_id, message=message)
 
 
-def list_conversation_history(
+def list_chat_exchange_history(
     *,
     user_id: int,
     db: Session,
-) -> list[ConversationHistoryItem]:
-    """로그인 사용자의 Conversation history를 내부 오류 없이 projection한다."""
+) -> list[ChatExchangeHistoryItem]:
+    """로그인 사용자의 ChatExchange history를 내부 오류 없이 projection한다."""
 
-    repository: ConversationRepository = SqlAlchemyConversationRepository(db=db)
+    repository: ChatExchangeRepository = SqlAlchemyChatExchangeRepository(db=db)
     try:
-        conversations = repository.list_user_conversations(user_id=user_id)
+        exchanges = repository.list_user_exchanges(user_id=user_id)
     except Exception as error:
         db.rollback()
         raise ChatPersistenceError() from error
 
-    return [_to_history_item(conversation) for conversation in conversations]
+    return [_to_history_item(exchange) for exchange in exchanges]
 
 
 def _normalize_message(message: str) -> str:
@@ -183,11 +186,11 @@ def _normalize_message(message: str) -> str:
     return normalized
 
 
-def _to_history_item(conversation: Conversation) -> ConversationHistoryItem:
-    return ConversationHistoryItem(
-        conversation_id=conversation.id,
-        question=conversation.question,
-        answer=conversation.answer,
-        status=conversation.status,
-        created_at=conversation.created_at,
+def _to_history_item(exchange: ChatExchange) -> ChatExchangeHistoryItem:
+    return ChatExchangeHistoryItem(
+        chat_exchange_id=exchange.id,
+        question=exchange.question,
+        answer=exchange.answer,
+        status=exchange.status,
+        created_at=exchange.created_at,
     )

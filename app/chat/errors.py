@@ -34,4 +34,4 @@ class ChatConfigurationError(ChatError):
 
 
 class ChatPersistenceError(ChatError):
-    """Conversation 조회 또는 저장 transaction이 실패했다."""
+    """ChatExchange 조회 또는 저장 transaction이 실패했다."""

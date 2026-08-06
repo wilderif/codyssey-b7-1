@@ -46,17 +46,17 @@ class UTCDateTime(TypeDecorator[datetime]):
         return value.astimezone(timezone.utc)
 
 
-class Conversation(Base):
+class ChatExchange(Base):
     """사용자의 질문 처리 결과를 저장한다."""
 
-    __tablename__ = "conversations"
+    __tablename__ = "chat_exchanges"
     __table_args__ = (
         CheckConstraint(
             "(status = 'success' AND answer IS NOT NULL "
             "AND error_message IS NULL) OR "
             "(status = 'failed' AND answer IS NULL "
             "AND error_message IS NOT NULL)",
-            name="ck_conversations_status_fields",
+            name="ck_chat_exchanges_status_fields",
         ),
     )
 

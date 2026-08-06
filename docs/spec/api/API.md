@@ -66,13 +66,13 @@ Content-Type: application/json
 
 ```json
 {
-  "conversation_id": 15,
+  "chat_exchange_id": 15,
   "answer": "FastAPI는 Python 기반의 web framework입니다.",
   "created_at": "2026-08-04T06:00:00Z"
 }
 ```
 
-- `conversation_id`는 `conversations.id`를 의미합니다.
+- `chat_exchange_id`는 `chat_exchanges.id`를 의미합니다.
 - 답변 저장이 성공한 뒤에만 `200 OK`를 반환합니다.
 
 ## 오류 응답
@@ -113,8 +113,8 @@ Content-Type: application/json
 
 `GET /logs`는 login 사용자의 기록만 `created_at DESC`로 조회해 `logs.html`을 rendering합니다.
 
-- Template variable: `conversations`
-- 항목: `conversation_id`, `question`, `answer`, `status`, `created_at`
+- Template variable: `chat_exchanges`
+- 항목: `chat_exchange_id`, `question`, `answer`, `status`, `created_at`
 - `answer=null`이고 `status=failed`이면 `답변을 생성하지 못했습니다.` 표시
 - 내부 `error_message`는 template에 전달하지 않음
 
