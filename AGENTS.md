@@ -14,6 +14,19 @@ Git 또는 GitHub 작업 전에는 작업에 따라
 [Git 규칙](docs/rules/git-rules.md) 또는
 [GitHub 규칙](docs/rules/github-rules.md)을 확인합니다.
 
+## PR 생성 전 확인
+
+1. [PR template](.github/pull_request_template.md)의 내용을 확인합니다.
+2. 다음 command를 모두 실행합니다.
+
+   ```bash
+   uv run ruff check .
+   uv run ruff format --check .
+   uv run pyright
+   ```
+
+3. 검사에서 발견된 문제를 수정하고 모든 command가 통과한 후 PR을 생성합니다.
+
 ## 문서 안내
 
 | 구분 | 기준 문서 |

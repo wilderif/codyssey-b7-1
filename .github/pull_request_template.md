@@ -15,5 +15,8 @@
 - [ ] `feature/*` branch에서 작업했습니다.
 - [ ] PR이 하나의 기능 또는 목적에 집중되어 있습니다.
 - [ ] 변경 목적과 주요 변경 내용을 작성했습니다.
+- [ ] `uv run ruff check .`이 통과하도록 lint 문제를 모두 수정했습니다.
+- [ ] `uv run ruff format --check .`이 통과하도록 format 문제를 모두 수정했습니다.
+- [ ] `uv run pyright`가 통과하도록 type 문제를 모두 수정했습니다.
 - [ ] 비밀정보와 credential이 포함되지 않았습니다.
 - [ ] 최소 1명의 팀원에게 review를 요청했습니다.
