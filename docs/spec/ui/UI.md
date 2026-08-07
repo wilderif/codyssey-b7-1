@@ -32,6 +32,9 @@
 최종 판별합니다.
 
 - `/chat`과 `/admin/logs`는 `POST /logout` form과 Logout button을 제공합니다.
+- `/chat`은 server가 현재 사용자를 관리자로 판별한 경우에만 `/admin/logs`로 이동하는
+  `관리자 Log 확인` link를 button 형태로 제공합니다. 일반 사용자에게는 이 link를 rendering하거나
+  DOM에 포함하지 않습니다.
 - `/admin/logs`는 `/chat`으로 돌아가는 link를 제공합니다.
 
 ## 3. 공통 UI 기준
@@ -89,7 +92,7 @@
 - 인증 실패는 username 존재 여부를 구분하지 않고
   `아이디 또는 비밀번호가 올바르지 않습니다.`만 표시합니다.
 - 인증 실패 후 username은 유지할 수 있지만 password는 다시 채우지 않습니다.
-- 성공하면 `/chat`으로 이동합니다.
+- 일반 사용자와 관리자 모두 성공하면 `/chat`으로 이동합니다.
 
 ## 6. Chat 화면
 
@@ -200,7 +203,7 @@ Request를 시작한 뒤 받은 Chat API 오류는 다음 기준으로 pending �
 ### 인증 화면
 
 - [ ] `/`가 인증 상태에 맞는 화면으로 이동함
-- [ ] 회원가입·Login 성공 시 계약된 경로로 이동함
+- [ ] 회원가입 성공은 `/login`, 일반 사용자·관리자 Login 성공은 `/chat`으로 이동함
 - [ ] 회원가입 오류와 Login 오류가 같은 화면에 안전하게 표시됨
 - [ ] 오류 후 password가 HTML과 DOM에 다시 채워지지 않음
 - [ ] 비로그인 사용자가 `/chat`과 `/admin/logs`에 접근할 수 없음
@@ -225,6 +228,7 @@ Request를 시작한 뒤 받은 Chat API 오류는 다음 기준으로 pending �
 
 - [ ] 관리자 table에 허용된 운영 metadata만 표시됨
 - [ ] 질문·답변·내부 오류·민감정보가 관리자 DOM에 포함되지 않음
+- [ ] `/chat`에서 관리자에게만 `관리자 Log 확인` button이 표시되고 일반 사용자 DOM에는 포함되지 않음
 - [ ] `/chat`과 `/admin/logs`에서 Logout할 수 있고 관리자 화면에서 `/chat`으로 이동할 수 있음
 - [ ] 360px mobile 화면에서 form을 사용할 수 있고 table을 가로 scroll할 수 있음
 - [ ] Keyboard만으로 주요 action을 실행할 수 있음
