@@ -21,6 +21,8 @@
 
 - 사용자가 text 질문을 입력할 수 있어야 한다.
 - 질문 제출 후 같은 화면에서 AI 응답을 확인할 수 있어야 한다.
+- 화면 구조, Browser 상태, interaction, 접근성, responsive 동작은
+  [Frontend UI 계약](ui/UI.md)을 따른다.
 
 ### 4.2 인증과 access control
 

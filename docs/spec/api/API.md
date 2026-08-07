@@ -18,6 +18,9 @@
 
 ## 2. HTML·폼 경로
 
+이 section은 HTTP 동작과 template data의 기준입니다. 화면 구조와 Browser interaction은
+[Frontend UI 계약](../ui/UI.md)을 따릅니다.
+
 | Method | 경로 | 성공 | 실패·비로그인 | 설명 |
 | --- | --- | --- | --- | --- |
 | `GET` | `/` | 로그인 `303 /chat` · 비로그인 `303 /login` | 해당 없음 | 메인화면 |
