@@ -16,16 +16,141 @@
 - 구체적인 색상, spacing, typography 값은 구현 세부사항입니다. 다만 모든 화면에서 같은 시각
   규칙을 사용하고 상태·focus를 명확히 구분해야 합니다.
 
-## 2. 화면과 접근 조건
+## 2. 화면별 API 경로와 응답 형식
 
-| 경로 | 화면·동작 | 접근 조건 |
-| --- | --- | --- |
-| `GET /` | 별도 화면 없이 인증 상태에 따라 이동 | 로그인 사용자는 `/chat`, 비로그인 사용자는 `/login` |
-| `GET /signup` | 회원가입 화면 | 공개 |
-| `GET /login` | Login 화면 | 공개 |
-| `GET /chat` | 이전 대화와 질문 입력을 함께 제공하는 Chat 화면 | 로그인 필수 |
-| `GET /admin/logs` | 사용자별 채팅 운영 metadata 조회 화면 | 관리자 필수 |
-| `POST /logout` | Session을 삭제하고 Login 화면으로 이동 | 비로그인 요청도 동일하게 처리 |
+### `/`
+
+#### 화면 진입 (`GET`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않습니다.
+- 로그인 사용자는 `303 /chat`, 비로그인 사용자는 `303 /login`으로 이동합니다.
+
+### `/signup`
+
+#### 화면 조회 (`GET`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않고 `200 signup.html`을 rendering합니다.
+
+#### 회원가입 제출 (`POST`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않습니다.
+- 성공하면 자동 login 없이 `303 /login`으로 이동합니다.
+- 중복 username이나 길이 오류가 발생하면 사용자용 message와 함께 같은 화면을 `400`으로
+  rendering합니다.
+
+### `/login`
+
+#### 화면 조회 (`GET`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않고 `200 login.html`을 rendering합니다.
+
+#### Login 제출 (`POST`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않습니다.
+- 성공하면 session을 생성하고 `303 /chat`으로 이동합니다.
+- 인증에 실패하면 `아이디 또는 비밀번호가 올바르지 않습니다.` message와 함께 같은 화면을
+  `400`으로 rendering합니다.
+
+### `/chat`
+
+#### 화면 조회 (`GET`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않고 `200 chat.html`을 rendering합니다.
+- `chat_exchanges` template variable에는 `chat_exchange_id`, `question`, `answer`, `status`,
+  `created_at` field가 포함됩니다.
+- 비로그인 사용자는 `303 /login`으로 이동합니다.
+
+#### 질문 전송 (`POST`)
+
+##### 사용할 API 경로
+
+- `POST /api/chat`
+
+##### 성공 응답 JSON
+
+```json
+{
+  "chat_exchange_id": 15,
+  "answer": "FastAPI는 Python 기반의 웹 프레임워크입니다.",
+  "created_at": "2026-08-04T06:00:00Z"
+}
+```
+
+##### 오류 응답 JSON
+
+```json
+{
+  "code": "...",
+  "detail": "..."
+}
+```
+
+- 정확한 HTTP status와 `code`·`detail`은
+  [API 계약의 오류 응답](../api/API.md#6-오류-응답)을 따릅니다.
+
+### `/admin/logs`
+
+#### 화면 조회 (`GET`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않고 관리자에게 `200 admin_logs.html`을 rendering합니다.
+- 비로그인 사용자는 `303 /login`으로 이동하고 비관리자는 `403`을 반환합니다.
+- 관리자 화면에는 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
+  `user_agent`, `response_time_ms`, `status`, `error_code` field를 제공합니다.
+
+### `/logout`
+
+#### Logout 제출 (`POST`)
+
+##### 사용할 API 경로
+
+- 추후 추가 예정입니다.
+
+##### 응답 JSON
+
+- JSON 응답은 사용하지 않습니다.
+- 로그인 여부와 관계없이 session을 삭제하고 `303 /login`으로 이동합니다.
 
 정확한 HTTP status와 redirect는 [API 계약의 HTML·form 경로](../api/API.md#2-html폼-경로)를
 따릅니다. Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 관리자 권한은 server가
