@@ -149,7 +149,7 @@ Frontend는 `detail` 문자열을 비교하지 않고 안정적인 `code`로 동
 
 - `/admin/logs`는 server runtime log file이 아니라 `chat_exchanges`에 저장된 사용자별 운영
   metadata를 읽기 전용 table로 표시합니다.
-- 기본 column은 `user_id`, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
+- 기본 column은 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
   `response_time_ms`, `status`, `error_code`입니다.
 - Nullable 값은 빈 cell 대신 `-`처럼 값이 없음을 알 수 있는 text로 표시합니다.
 - Record가 없으면 table 대신 `표시할 운영 기록이 없습니다.`를 표시합니다.

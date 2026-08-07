@@ -53,7 +53,7 @@
 `GET /admin/logs`는 관리자만 접근하는 읽기 전용 화면이며 server runtime log file을 보여주지
 않습니다. `chat_exchanges`에 저장된 사용자별 운영 metadata를 조회합니다.
 
-- 기본 조회 항목: 사용자 식별 정보, `chat_exchange_id`, `created_at`, `request_id`,
+- 기본 조회 항목: `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
   `user_agent`, `response_time_ms`, `status`, `error_code`
 - 질문·답변 원문과 내부 `error_message`는 기본 표시 대상에서 제외합니다.
 - `require_admin`이 server에서 접근을 판별하며 UI는 관리자 여부를 최종 판별하지 않습니다.
@@ -141,7 +141,7 @@ locale에 따라 변환되는 사용자용 안전 message입니다.
 | `500` | DB 저장 실패 | `db_save_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
 | `500` | 분류되지 않은 내부 오류 | `internal_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
 | `502` | OpenAI API 오류 | `openai_api_error` | `AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.` |
-| `504` | OpenAI 30초 timeout | `openai_timeout` | `AI 응답 시간이 초과되었습니다.` |
+| `504` | OpenAI 30초 timeout | `openai_timeout` | `AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.` |
 
 - 단일 `AppError`와 공통 handler가 프로젝트 정의 오류를 `code`·`detail` 형식으로 변환합니다.
   오류별 하위 예외 class는 만들지 않습니다.

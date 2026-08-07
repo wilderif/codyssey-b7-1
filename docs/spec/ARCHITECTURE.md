@@ -153,7 +153,7 @@ def get_chat_exchange(
 - DB 저장 실패는 rollback하고 `500`을 `502`·`504`보다 우선합니다.
 - History는 로그인 사용자의 record만 최신순으로 제공하며 내부 `error_message`와 운영
   metadata를 포함하지 않습니다.
-- `list_admin_chat_operation_metadata()`는 사용자 식별 정보, `chat_exchange_id`, `created_at`,
+- `list_admin_chat_operation_metadata()`는 `user_id`, `username`, `chat_exchange_id`, `created_at`,
   `request_id`, `user_agent`, `response_time_ms`, `status`, `error_code`만 반환합니다. 질문·답변
   원문과 내부 `error_message`는 반환하지 않습니다.
 - `get_chat_exchange()`는 `chat_exchange_id`와 `user_id`를 함께 조건으로 조회합니다. 없는 ID와
