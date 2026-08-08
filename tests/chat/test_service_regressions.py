@@ -69,7 +69,14 @@ def test_validation_error_identifies_the_invalid_rule(
     service = create_service(db, StaticAnswerGenerator())
 
     with pytest.raises(ChatValidationError) as captured:
-        asyncio.run(service.process_chat(user_id=user_id, message=message))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message=message,
+                request_id="validation-request",
+                user_agent=None,
+            )
+        )
 
     assert captured.value.reason == expected_reason
 
@@ -85,7 +92,14 @@ def test_production_wrapper_validates_before_creating_openai_client(
     monkeypatch.setattr(service_module, "create_openai_client", fail_if_called)
 
     with pytest.raises(ChatValidationError) as captured:
-        asyncio.run(service_module.process_chat(user_id=user_id, message=" ", db=db))
+        asyncio.run(
+            service_module.process_chat(
+                user_id=user_id,
+                message=" ",
+                user_agent=None,
+                db=db,
+            )
+        )
 
     assert captured.value.reason == "empty_message"
 
@@ -96,7 +110,14 @@ def test_context_read_transaction_ends_before_answer_generation(
 ) -> None:
     service = create_service(db, TransactionCheckingGenerator(db))
 
-    result = asyncio.run(service.process_chat(user_id=user_id, message="question"))
+    result = asyncio.run(
+        service.process_chat(
+            user_id=user_id,
+            message="question",
+            request_id="transaction-request",
+            user_agent=None,
+        )
+    )
 
     assert result.answer == "answer"
 
@@ -108,7 +129,14 @@ def test_unexpected_generator_error_is_not_reclassified_or_persisted(
     service = create_service(db, UnexpectedErrorGenerator())
 
     with pytest.raises(RuntimeError, match="unexpected generator failure"):
-        asyncio.run(service.process_chat(user_id=user_id, message="question"))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="unexpected-error-request",
+                user_agent=None,
+            )
+        )
 
     saved = db.scalar(select(ChatExchange).where(ChatExchange.question == "question"))
     assert saved is None
@@ -120,7 +148,14 @@ def test_success_does_not_start_a_new_transaction_after_commit(
 ) -> None:
     service = create_service(db, StaticAnswerGenerator())
 
-    result = asyncio.run(service.process_chat(user_id=user_id, message="question"))
+    result = asyncio.run(
+        service.process_chat(
+            user_id=user_id,
+            message="question",
+            request_id="success-transaction-request",
+            user_agent=None,
+        )
+    )
 
     assert result.chat_exchange_id > 0
     assert not db.in_transaction()

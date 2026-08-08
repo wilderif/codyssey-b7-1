@@ -19,6 +19,9 @@ class ChatExchangeRepository(Protocol):
         user_id: int,
         question: str,
         answer: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
     ) -> ChatExchange:
         """성공 ChatExchange를 flush한다."""
 
@@ -30,6 +33,10 @@ class ChatExchangeRepository(Protocol):
         user_id: int,
         question: str,
         error_message: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
+        error_code: str,
     ) -> ChatExchange:
         """실패 ChatExchange를 flush한다."""
 
@@ -63,12 +70,18 @@ class SqlAlchemyChatExchangeRepository:
         user_id: int,
         question: str,
         answer: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
     ) -> ChatExchange:
         return create_success_exchange(
             db=self._db,
             user_id=user_id,
             question=question,
             answer=answer,
+            request_id=request_id,
+            user_agent=user_agent,
+            response_time_ms=response_time_ms,
         )
 
     def create_failed_exchange(
@@ -77,12 +90,20 @@ class SqlAlchemyChatExchangeRepository:
         user_id: int,
         question: str,
         error_message: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
+        error_code: str,
     ) -> ChatExchange:
         return create_failed_exchange(
             db=self._db,
             user_id=user_id,
             question=question,
             error_message=error_message,
+            request_id=request_id,
+            user_agent=user_agent,
+            response_time_ms=response_time_ms,
+            error_code=error_code,
         )
 
     def get_recent_success_exchanges(
@@ -107,6 +128,9 @@ def create_success_exchange(
     user_id: int,
     question: str,
     answer: str,
+    request_id: str,
+    user_agent: str | None,
+    response_time_ms: int,
 ) -> ChatExchange:
     """성공한 질문·답변 쌍을 flush한다."""
 
@@ -116,6 +140,10 @@ def create_success_exchange(
         answer=answer,
         status="success",
         error_message=None,
+        request_id=request_id,
+        user_agent=user_agent,
+        response_time_ms=response_time_ms,
+        error_code=None,
     )
     db.add(exchange)
     db.flush()
@@ -128,6 +156,10 @@ def create_failed_exchange(
     user_id: int,
     question: str,
     error_message: str,
+    request_id: str,
+    user_agent: str | None,
+    response_time_ms: int,
+    error_code: str,
 ) -> ChatExchange:
     """실패한 질문·답변 쌍을 flush한다."""
 
@@ -137,6 +169,10 @@ def create_failed_exchange(
         answer=None,
         status="failed",
         error_message=error_message,
+        request_id=request_id,
+        user_agent=user_agent,
+        response_time_ms=response_time_ms,
+        error_code=error_code,
     )
     db.add(exchange)
     db.flush()

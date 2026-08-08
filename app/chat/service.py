@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -74,9 +76,17 @@ class ChatService:
         self._repository = repository
         self._answer_generator = answer_generator
 
-    async def process_chat(self, *, user_id: int, message: str) -> ChatResult:
+    async def process_chat(
+        self,
+        *,
+        user_id: int,
+        message: str,
+        request_id: str,
+        user_agent: str | None,
+    ) -> ChatResult:
         """질문을 처리하고 성공·실패 ChatExchange transaction을 완료한다."""
 
+        started_at = time.perf_counter()
         question = _normalize_message(message)
         try:
             exchanges = self._repository.get_recent_success_exchanges(
@@ -99,6 +109,10 @@ class ChatService:
                 user_id=user_id,
                 question=question,
                 error_message=error.record_message,
+                request_id=request_id,
+                user_agent=user_agent,
+                response_time_ms=_elapsed_time_ms(started_at),
+                error_code=error.record_message,
             )
             raise
 
@@ -107,6 +121,9 @@ class ChatService:
                 user_id=user_id,
                 question=question,
                 answer=answer,
+                request_id=request_id,
+                user_agent=user_agent,
+                response_time_ms=_elapsed_time_ms(started_at),
             )
             result = ChatResult(
                 chat_exchange_id=exchange.id,
@@ -126,12 +143,20 @@ class ChatService:
         user_id: int,
         question: str,
         error_message: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
+        error_code: str,
     ) -> None:
         try:
             self._repository.create_failed_exchange(
                 user_id=user_id,
                 question=question,
                 error_message=error_message,
+                request_id=request_id,
+                user_agent=user_agent,
+                response_time_ms=response_time_ms,
+                error_code=error_code,
             )
             self._db.commit()
         except Exception as error:
@@ -139,7 +164,13 @@ class ChatService:
             raise ChatPersistenceError() from error
 
 
-async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult:
+async def process_chat(
+    *,
+    user_id: int,
+    message: str,
+    user_agent: str | None = None,
+    db: Session,
+) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
     normalized_message = _normalize_message(message)
@@ -153,7 +184,12 @@ async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult
                 model=get_openai_model(),
             ),
         )
-        return await service.process_chat(user_id=user_id, message=normalized_message)
+        return await service.process_chat(
+            user_id=user_id,
+            message=normalized_message,
+            request_id=str(uuid4()),
+            user_agent=user_agent,
+        )
 
 
 def list_chat_exchange_history(
@@ -180,6 +216,10 @@ def _normalize_message(message: str) -> str:
     if len(normalized) > MAX_MESSAGE_LENGTH:
         raise ChatValidationError(ChatValidationReason.MESSAGE_TOO_LONG)
     return normalized
+
+
+def _elapsed_time_ms(started_at: float) -> int:
+    return max(0, int((time.perf_counter() - started_at) * 1000))
 
 
 def _to_history_item(exchange: ChatExchange) -> ChatExchangeHistoryItem:

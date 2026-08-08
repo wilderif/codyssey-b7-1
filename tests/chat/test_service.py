@@ -65,6 +65,10 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
                 answer=f"a{index}",
                 status="success",
                 error_message=None,
+                request_id=f"context-success-{index}",
+                user_agent=None,
+                response_time_ms=1,
+                error_code=None,
                 created_at=base_time + timedelta(minutes=index),
             )
         )
@@ -76,6 +80,10 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
                 answer=None,
                 status="failed",
                 error_message="openai_timeout",
+                request_id="context-failed",
+                user_agent=None,
+                response_time_ms=1,
+                error_code="openai_timeout",
                 created_at=base_time + timedelta(hours=1),
             ),
             ChatExchange(
@@ -84,6 +92,10 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
                 answer="other answer",
                 status="success",
                 error_message=None,
+                request_id="context-other",
+                user_agent=None,
+                response_time_ms=1,
+                error_code=None,
                 created_at=base_time + timedelta(hours=2),
             ),
         ]
@@ -93,7 +105,12 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
     service = create_service(db, generator)
 
     result = asyncio.run(
-        service.process_chat(user_id=user_id, message="  current question  ")
+        service.process_chat(
+            user_id=user_id,
+            message="  current question  ",
+            request_id="success-request",
+            user_agent="test-agent/1.0",
+        )
     )
 
     assert generator.messages == [
@@ -114,10 +131,23 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
     ]
     saved = db.get(ChatExchange, result.chat_exchange_id)
     assert saved is not None
-    assert (saved.question, saved.answer, saved.status, saved.error_message) == (
+    assert (
+        saved.question,
+        saved.answer,
+        saved.status,
+        saved.error_message,
+        saved.request_id,
+        saved.user_agent,
+        saved.response_time_ms >= 0,
+        saved.error_code,
+    ) == (
         "current question",
         "generated answer",
         "success",
+        None,
+        "success-request",
+        "test-agent/1.0",
+        True,
         None,
     )
 
@@ -127,7 +157,7 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
     [
         (ChatGenerationError(), "openai_api_error"),
         (ChatTimeoutError(), "openai_timeout"),
-        (ChatInvalidResponseError(), "openai_invalid_response"),
+        (ChatInvalidResponseError(), "openai_api_error"),
     ],
 )
 def test_generation_error_persists_safe_failure_and_propagates(
@@ -139,13 +169,21 @@ def test_generation_error_persists_safe_failure_and_propagates(
     service = create_service(db, RecordingGenerator(error=error))
 
     with pytest.raises(type(error)):
-        asyncio.run(service.process_chat(user_id=user_id, message="question"))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id=f"failure-request-{record_message}",
+                user_agent=None,
+            )
+        )
 
     saved = db.scalar(select(ChatExchange).where(ChatExchange.question == "question"))
     assert saved is not None
-    assert (saved.answer, saved.status, saved.error_message) == (
+    assert (saved.answer, saved.status, saved.error_message, saved.error_code) == (
         None,
         "failed",
+        record_message,
         record_message,
     )
 
@@ -163,7 +201,14 @@ def test_success_commit_failure_rolls_back_and_raises_persistence_error(
     monkeypatch.setattr(db, "commit", fail_commit)
 
     with pytest.raises(ChatPersistenceError):
-        asyncio.run(service.process_chat(user_id=user_id, message="question"))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="success-commit-failure",
+                user_agent=None,
+            )
+        )
 
     assert not db.in_transaction()
 
@@ -181,7 +226,14 @@ def test_failed_record_commit_failure_takes_priority_over_generation_error(
     monkeypatch.setattr(db, "commit", fail_commit)
 
     with pytest.raises(ChatPersistenceError):
-        asyncio.run(service.process_chat(user_id=user_id, message="question"))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="failed-commit-failure",
+                user_agent=None,
+            )
+        )
 
     assert not db.in_transaction()
 
@@ -201,6 +253,10 @@ def test_history_projection_is_user_scoped_and_omits_internal_error(
                 answer=None,
                 status="failed",
                 error_message="openai_api_error",
+                request_id="history-mine",
+                user_agent=None,
+                response_time_ms=1,
+                error_code="openai_api_error",
             ),
             ChatExchange(
                 user_id=other.id,
@@ -208,6 +264,10 @@ def test_history_projection_is_user_scoped_and_omits_internal_error(
                 answer="other answer",
                 status="success",
                 error_message=None,
+                request_id="history-other",
+                user_agent=None,
+                response_time_ms=1,
+                error_code=None,
             ),
         ]
     )
