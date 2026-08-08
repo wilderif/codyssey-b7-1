@@ -263,6 +263,63 @@ def test_post_chat_returns_safe_error_for_processing_failures(
     assert "secret_cookie" not in response.text
 
 
+def test_post_chat_returns_internal_error_for_context_read_failure(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.chat import router as router_module
+
+    _login(app, user_id)
+
+    async def failing_process_chat(**_kwargs: object) -> ChatResult:
+        raise ChatPersistenceError(is_write=False)
+
+    monkeypatch.setattr(router_module, "process_chat", failing_process_chat)
+
+    response = client.post("/api/chat", json={"message": "question"})
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_error",
+        "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    }
+
+
+@pytest.mark.parametrize(
+    ("path", "service_function"),
+    [
+        ("/api/chat-exchanges", "list_chat_exchange_history"),
+        ("/api/chat-exchanges/1", "get_chat_exchange"),
+    ],
+)
+def test_history_query_failures_return_internal_error(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    service_function: str,
+) -> None:
+    from app.chat import router as router_module
+
+    _login(app, user_id)
+
+    def failing_query(**_kwargs: object) -> object:
+        raise ChatPersistenceError(is_write=False)
+
+    monkeypatch.setattr(router_module, service_function, failing_query)
+
+    response = client.get(path)
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_error",
+        "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    }
+
+
 def test_unhandled_error_log_hides_internal_error_detail(
     app: FastAPI,
     client: TestClient,

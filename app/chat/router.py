@@ -71,7 +71,7 @@ async def post_chat(
     except ChatGenerationError as error:
         raise AppError(status_code=502, code="openai_api_error") from error
     except ChatPersistenceError as error:
-        raise AppError(status_code=500, code="db_save_error") from error
+        raise _persistence_app_error(error) from error
 
     return ChatResponse.model_validate(result)
 
@@ -93,7 +93,7 @@ def get_chat_exchanges(
             for item in list_chat_exchange_history(user_id=user_id, db=db)
         ]
     except ChatPersistenceError as error:
-        raise AppError(status_code=500, code="db_save_error") from error
+        raise _persistence_app_error(error) from error
 
 
 @router.get(
@@ -120,7 +120,7 @@ def get_chat_exchange_by_id(
             db=db,
         )
     except ChatPersistenceError as error:
-        raise AppError(status_code=500, code="db_save_error") from error
+        raise _persistence_app_error(error) from error
     if exchange is None:
         raise AppError(status_code=404, code="conversation_not_found")
     return ChatExchangeResponse.model_validate(exchange)
@@ -179,6 +179,13 @@ def _validation_app_error(error: ChatValidationError) -> AppError:
         ChatValidationReason.MESSAGE_TOO_LONG: "message_too_long",
     }[error.reason]
     return AppError(status_code=400, code="validation_error", detail_key=detail_key)
+
+
+def _persistence_app_error(error: ChatPersistenceError) -> AppError:
+    """저장 실패만 db_save_error로, 조회 실패는 internal_error로 변환한다."""
+
+    code = "db_save_error" if error.is_write else "internal_error"
+    return AppError(status_code=500, code=code)
 
 
 def _normalize_user_agent(user_agent: str | None) -> str | None:

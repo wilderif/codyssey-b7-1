@@ -106,7 +106,7 @@ class ChatService:
             self._db.rollback()
         except Exception as error:
             self._db.rollback()
-            raise ChatPersistenceError() from error
+            raise ChatPersistenceError(is_write=False) from error
 
         try:
             logger.info("ai_call_started request_id=%s", request_id)
@@ -222,7 +222,7 @@ def list_chat_exchange_history(
         exchanges = repository.list_user_exchanges(user_id=user_id)
     except Exception as error:
         db.rollback()
-        raise ChatPersistenceError() from error
+        raise ChatPersistenceError(is_write=False) from error
 
     return [_to_history_item(exchange) for exchange in exchanges]
 
@@ -240,7 +240,7 @@ def get_chat_exchange(
         )
     except Exception as error:
         db.rollback()
-        raise ChatPersistenceError() from error
+        raise ChatPersistenceError(is_write=False) from error
     return _to_history_item(exchange) if exchange is not None else None
 
 

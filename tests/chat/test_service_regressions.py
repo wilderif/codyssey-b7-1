@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +14,12 @@ from app.chat.context import ChatMessage
 from app.chat.errors import ChatPersistenceError, ChatValidationError
 from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
-from app.chat.service import AnswerGenerator, ChatService
+from app.chat.service import (
+    AnswerGenerator,
+    ChatService,
+    get_chat_exchange,
+    list_chat_exchange_history,
+)
 
 
 class StaticAnswerGenerator:
@@ -180,6 +185,78 @@ class FailingSaveRepository(SqlAlchemyChatExchangeRepository):
     ) -> ChatExchange:
         self.save_attempts += 1
         raise RuntimeError("database save failed")
+
+
+class FailingReadRepository(SqlAlchemyChatExchangeRepository):
+    """모든 ChatExchange read를 실패시킨다."""
+
+    def get_recent_success_exchanges(
+        self, *, user_id: int, limit: int = 5
+    ) -> list[ChatExchange]:
+        raise RuntimeError("context read failed")
+
+    def list_user_exchanges(self, *, user_id: int) -> list[ChatExchange]:
+        raise RuntimeError("history list failed")
+
+    def get_user_exchange(
+        self, *, user_id: int, chat_exchange_id: int
+    ) -> ChatExchange | None:
+        raise RuntimeError("history item failed")
+
+
+def _assert_read_failure(call: Callable[[], object]) -> None:
+    with pytest.raises(ChatPersistenceError) as captured:
+        call()
+
+    assert captured.value.is_write is False
+
+
+def test_context_read_failure_is_classified_as_non_write_error(
+    db: Session,
+    user_id: int,
+) -> None:
+    service = ChatService(
+        db=db,
+        repository=FailingReadRepository(db=db),
+        answer_generator=StaticAnswerGenerator(),
+    )
+
+    _assert_read_failure(
+        lambda: asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="failing-context-read",
+                user_agent=None,
+            )
+        )
+    )
+
+
+def test_history_list_read_failure_is_classified_as_non_write_error(
+    db: Session,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        service_module, "SqlAlchemyChatExchangeRepository", FailingReadRepository
+    )
+
+    _assert_read_failure(lambda: list_chat_exchange_history(user_id=user_id, db=db))
+
+
+def test_single_history_read_failure_is_classified_as_non_write_error(
+    db: Session,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        service_module, "SqlAlchemyChatExchangeRepository", FailingReadRepository
+    )
+
+    _assert_read_failure(
+        lambda: get_chat_exchange(user_id=user_id, chat_exchange_id=1, db=db)
+    )
 
 
 def test_save_failure_does_not_attempt_to_persist_another_failure_record(

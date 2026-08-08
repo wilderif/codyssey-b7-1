@@ -59,4 +59,8 @@ class ChatConfigurationError(ChatError):
 
 
 class ChatPersistenceError(ChatError):
-    """ChatExchange 조회 또는 저장 transaction이 실패했다."""
+    """ChatExchange read 또는 write transaction이 실패했다."""
+
+    def __init__(self, *, is_write: bool = True) -> None:
+        self.is_write = is_write
+        super().__init__("write" if is_write else "read")
