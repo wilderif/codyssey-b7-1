@@ -42,17 +42,36 @@ class Settings(BaseSettings):
         default="INFO",
         validation_alias="LOG_LEVEL",
     )
+    admin_username: str = Field(
+        default="admin",
+        min_length=3,
+        max_length=30,
+        validation_alias="ADMIN_USERNAME",
+    )
+    admin_initial_password: SecretStr | None = Field(
+        default=None,
+        validation_alias="ADMIN_INITIAL_PASSWORD",
+    )
 
+    # APP_ENV는 대소문자 상관없이 받는다.
     @field_validator("app_env", mode="before")
     @classmethod
     def normalize_app_env(cls, value: object) -> object:
         return value.lower() if isinstance(value, str) else value
 
+    # LOG_LEVEL도 소문자로 넣어도 되게 한다.
     @field_validator("log_level", mode="before")
     @classmethod
     def normalize_log_level(cls, value: object) -> object:
         return value.upper() if isinstance(value, str) else value
 
+    # 값 검사 전에 ADMIN_USERNAME 앞뒤 공백을 없앤다.
+    @field_validator("admin_username", mode="before")
+    @classmethod
+    def normalize_admin_username(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    # timeout은 0 이하로 못 넣게 막는다.
     @field_validator("openai_timeout_seconds")
     @classmethod
     def validate_timeout(cls, value: float) -> float:
@@ -60,6 +79,7 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_TIMEOUT_SECONDS는 0보다 커야 합니다.")
         return value
 
+    # production일 때 꼭 필요한 설정들이 있는지 본다.
     @model_validator(mode="after")
     def validate_production_settings(self) -> Self:
         if self.app_env != "production":
