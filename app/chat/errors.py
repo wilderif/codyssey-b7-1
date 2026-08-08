@@ -5,6 +5,18 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class AppError(Exception):
+    """JSON API가 안전하게 응답할 수 있는 application 오류다."""
+
+    def __init__(
+        self, *, status_code: int, code: str, detail_key: str | None = None
+    ) -> None:
+        self.status_code = status_code
+        self.code = code
+        self.detail_key = detail_key or code
+        super().__init__(code)
+
+
 class ChatError(Exception):
     """사용자 응답으로 변환 가능한 Chat domain 오류의 base class다."""
 
@@ -47,4 +59,8 @@ class ChatConfigurationError(ChatError):
 
 
 class ChatPersistenceError(ChatError):
-    """ChatExchange 조회 또는 저장 transaction이 실패했다."""
+    """ChatExchange read 또는 write transaction이 실패했다."""
+
+    def __init__(self, *, is_write: bool = True) -> None:
+        self.is_write = is_write
+        super().__init__("write" if is_write else "read")

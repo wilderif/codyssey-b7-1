@@ -86,10 +86,13 @@ class ChatService:
         message: str,
         request_id: str,
         user_agent: str | None,
+        request_already_logged: bool = False,
     ) -> ChatResult:
         """질문을 처리하고 성공·실패 ChatExchange transaction을 완료한다."""
 
         started_at = time.perf_counter()
+        if not request_already_logged:
+            logger.info("request_received request_id=%s", request_id)
         question = _normalize_message(message)
         try:
             exchanges = self._repository.get_recent_success_exchanges(
@@ -103,11 +106,16 @@ class ChatService:
             self._db.rollback()
         except Exception as error:
             self._db.rollback()
-            raise ChatPersistenceError() from error
+            raise ChatPersistenceError(is_write=False) from error
 
         try:
+            logger.info("ai_call_started request_id=%s", request_id)
             answer = await self._answer_generator.generate(messages=messages)
+            logger.info("ai_call_succeeded request_id=%s", request_id)
         except ChatGenerationError as error:
+            logger.warning(
+                "ai_call_failed request_id=%s code=%s", request_id, error.record_message
+            )
             self._save_failed_exchange(
                 user_id=user_id,
                 question=question,
@@ -116,6 +124,20 @@ class ChatService:
                 user_agent=user_agent,
                 response_time_ms=_elapsed_time_ms(started_at),
                 error_code=error.record_message,
+            )
+            raise
+        except Exception:
+            logger.warning(
+                "ai_call_failed request_id=%s code=internal_error", request_id
+            )
+            self._save_failed_exchange(
+                user_id=user_id,
+                question=question,
+                error_message="internal_error",
+                request_id=request_id,
+                user_agent=user_agent,
+                response_time_ms=_elapsed_time_ms(started_at),
+                error_code="internal_error",
             )
             raise
 
@@ -134,9 +156,10 @@ class ChatService:
                 created_at=exchange.created_at,
             )
             self._db.commit()
+            logger.info("db_save_succeeded request_id=%s", request_id)
         except Exception as error:
             self._db.rollback()
-            logger.error("db_save_failed")
+            logger.error("db_save_failed request_id=%s", request_id)
             raise ChatPersistenceError() from error
 
         return result
@@ -163,9 +186,10 @@ class ChatService:
                 error_code=error_code,
             )
             self._db.commit()
+            logger.info("db_save_succeeded request_id=%s", request_id)
         except Exception as error:
             self._db.rollback()
-            logger.error("db_save_failed")
+            logger.error("db_save_failed request_id=%s", request_id)
             raise ChatPersistenceError() from error
 
 
@@ -178,6 +202,8 @@ async def process_chat(
 ) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
+    request_id = str(uuid4())
+    logger.info("request_received request_id=%s", request_id)
     normalized_message = _normalize_message(message)
     repository = SqlAlchemyChatExchangeRepository(db=db)
     async with create_openai_client() as client:
@@ -192,8 +218,9 @@ async def process_chat(
         return await service.process_chat(
             user_id=user_id,
             message=normalized_message,
-            request_id=str(uuid4()),
+            request_id=request_id,
             user_agent=user_agent,
+            request_already_logged=True,
         )
 
 
@@ -209,9 +236,26 @@ def list_chat_exchange_history(
         exchanges = repository.list_user_exchanges(user_id=user_id)
     except Exception as error:
         db.rollback()
-        raise ChatPersistenceError() from error
+        raise ChatPersistenceError(is_write=False) from error
 
     return [_to_history_item(exchange) for exchange in exchanges]
+
+
+def get_chat_exchange(
+    *, user_id: int, chat_exchange_id: int, db: Session
+) -> ChatExchangeHistoryItem | None:
+    """사용자 소유의 단일 ChatExchange를 안전한 projection으로 반환한다."""
+
+    repository: ChatExchangeRepository = SqlAlchemyChatExchangeRepository(db=db)
+    try:
+        exchange = repository.get_user_exchange(
+            user_id=user_id,
+            chat_exchange_id=chat_exchange_id,
+        )
+    except Exception as error:
+        db.rollback()
+        raise ChatPersistenceError(is_write=False) from error
+    return _to_history_item(exchange) if exchange is not None else None
 
 
 def _normalize_message(message: str) -> str:

@@ -57,6 +57,13 @@ class ChatExchangeRepository(Protocol):
 
         ...
 
+    def get_user_exchange(
+        self, *, user_id: int, chat_exchange_id: int
+    ) -> ChatExchange | None:
+        """사용자가 소유한 특정 ChatExchange를 반환한다."""
+
+        ...
+
 
 class SqlAlchemyChatExchangeRepository:
     """SQLAlchemy Session을 사용하는 ChatExchangeRepository 구현체다."""
@@ -120,6 +127,15 @@ class SqlAlchemyChatExchangeRepository:
 
     def list_user_exchanges(self, *, user_id: int) -> list[ChatExchange]:
         return list_user_exchanges(db=self._db, user_id=user_id)
+
+    def get_user_exchange(
+        self, *, user_id: int, chat_exchange_id: int
+    ) -> ChatExchange | None:
+        return get_user_exchange(
+            db=self._db,
+            user_id=user_id,
+            chat_exchange_id=chat_exchange_id,
+        )
 
 
 def create_success_exchange(
@@ -211,3 +227,15 @@ def list_user_exchanges(*, db: Session, user_id: int) -> list[ChatExchange]:
         .order_by(ChatExchange.created_at.desc(), ChatExchange.id.desc())
     )
     return list(db.scalars(statement))
+
+
+def get_user_exchange(
+    *, db: Session, user_id: int, chat_exchange_id: int
+) -> ChatExchange | None:
+    """사용자가 소유한 특정 ChatExchange를 복합 조건으로 조회한다."""
+
+    statement = select(ChatExchange).where(
+        ChatExchange.id == chat_exchange_id,
+        ChatExchange.user_id == user_id,
+    )
+    return db.scalar(statement)
