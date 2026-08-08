@@ -90,6 +90,7 @@ class ChatService:
         """질문을 처리하고 성공·실패 ChatExchange transaction을 완료한다."""
 
         started_at = time.perf_counter()
+        logger.info("chat_request_received request_id=%s", request_id)
         question = _normalize_message(message)
         try:
             exchanges = self._repository.get_recent_success_exchanges(
@@ -186,7 +187,6 @@ async def process_chat(
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
     request_id = str(uuid4())
-    logger.info("chat_request_received request_id=%s user_id=%s", request_id, user_id)
     normalized_message = _normalize_message(message)
     repository = SqlAlchemyChatExchangeRepository(db=db)
     async with create_openai_client() as client:

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
+import asyncio
+from collections.abc import Generator, Sequence
 from datetime import UTC, datetime
 from unittest.mock import ANY
 
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user_id
 from app.auth.models import User
+from app.chat.context import ChatMessage
 from app.chat.errors import (
     AppError,
     ChatGenerationError,
@@ -21,7 +23,8 @@ from app.chat.errors import (
     ChatTimeoutError,
 )
 from app.chat.models import ChatExchange
-from app.chat.service import ChatResult
+from app.chat.repository import SqlAlchemyChatExchangeRepository
+from app.chat.service import ChatResult, ChatService
 from app.core.database import get_db
 
 
@@ -247,6 +250,151 @@ def test_unhandled_error_log_hides_internal_error_detail(
     assert "secret_cookie" not in caplog.text
 
 
+class _AnswerGenerator:
+    def __init__(self, error: ChatGenerationError | None = None) -> None:
+        self._error = error
+
+    async def generate(self, *, messages: Sequence[ChatMessage]) -> str:
+        if self._error is not None:
+            raise self._error
+        return "answer"
+
+
+class _SaveFailingRepository(SqlAlchemyChatExchangeRepository):
+    def create_success_exchange(self, **_kwargs: object) -> ChatExchange:
+        raise RuntimeError("SELECT stack api-key Cookie internal error_message")
+
+
+def _service_log_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [record.getMessage() for record in caplog.records]
+
+
+def _assert_safe_request_id_logs(
+    messages: list[str], *, request_id: str, expected_events: set[str]
+) -> None:
+    assert {
+        message.split(" request_id=", maxsplit=1)[0] for message in messages
+    } == expected_events
+    assert all(f"request_id={request_id}" in message for message in messages)
+    log_text = "\n".join(messages).lower()
+    for secret in (
+        "select",
+        "stack",
+        "key",
+        "cookie",
+        "internal error_message",
+    ):
+        assert secret not in log_text
+
+
+def test_service_success_logs_request_ai_and_db_events_with_request_id(
+    db: Session,
+    user_id: int,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    request_id = "safe-success-request"
+    service = ChatService(
+        db=db,
+        repository=SqlAlchemyChatExchangeRepository(db=db),
+        answer_generator=_AnswerGenerator(),
+    )
+
+    with caplog.at_level("INFO", logger="app.chat.service"):
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="SELECT stack api-key Cookie internal error_message",
+                request_id=request_id,
+                user_agent="Cookie secret",
+            )
+        )
+
+    _assert_safe_request_id_logs(
+        _service_log_messages(caplog),
+        request_id=request_id,
+        expected_events={
+            "chat_request_received",
+            "ai_call_started",
+            "ai_call_succeeded",
+            "db_save_succeeded",
+        },
+    )
+
+
+def test_service_failure_logs_safe_ai_and_db_failure_events_with_request_id(
+    db: Session,
+    user_id: int,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    request_id = "safe-failure-request"
+    service = ChatService(
+        db=db,
+        repository=_SaveFailingRepository(db=db),
+        answer_generator=_AnswerGenerator(),
+    )
+
+    with (
+        caplog.at_level("INFO", logger="app.chat.service"),
+        pytest.raises(ChatPersistenceError),
+    ):
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id=request_id,
+                user_agent=None,
+            )
+        )
+
+    _assert_safe_request_id_logs(
+        _service_log_messages(caplog),
+        request_id=request_id,
+        expected_events={
+            "chat_request_received",
+            "ai_call_started",
+            "ai_call_succeeded",
+            "db_save_failed",
+        },
+    )
+
+
+def test_service_generation_failure_logs_safe_ai_and_db_events_with_request_id(
+    db: Session,
+    user_id: int,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    request_id = "safe-generation-failure-request"
+    service = ChatService(
+        db=db,
+        repository=SqlAlchemyChatExchangeRepository(db=db),
+        answer_generator=_AnswerGenerator(error=ChatGenerationError()),
+    )
+
+    with (
+        caplog.at_level("INFO", logger="app.chat.service"),
+        pytest.raises(ChatGenerationError),
+    ):
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id=request_id,
+                user_agent=None,
+            )
+        )
+
+    _assert_safe_request_id_logs(
+        _service_log_messages(caplog),
+        request_id=request_id,
+        expected_events={
+            "chat_request_received",
+            "ai_call_started",
+            "ai_call_failed",
+            "db_save_succeeded",
+        },
+    )
+
+
 def test_history_is_isolated_and_hides_operational_metadata(
     app: FastAPI,
     client: TestClient,
@@ -330,7 +478,9 @@ def test_single_history_hides_other_users_as_not_found(
     ("accept_language", "detail"),
     [
         ("en-US,en;q=0.9", "Please log in."),
+        ("ko-KR,ko;q=0.9", "로그인이 필요합니다."),
         ("fr", "로그인이 필요합니다."),
+        ("en;q=invalid", "로그인이 필요합니다."),
     ],
 )
 def test_error_detail_uses_supported_locale_or_korean_fallback(
@@ -346,3 +496,16 @@ def test_error_detail_uses_supported_locale_or_korean_fallback(
 
     assert response.status_code == 401
     assert response.json() == {"code": "not_authenticated", "detail": detail}
+
+
+def test_missing_english_translation_key_falls_back_to_korean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.chat import i18n
+
+    monkeypatch.delitem(i18n._MESSAGES["en"], "openai_api_error")
+
+    assert (
+        i18n.get_message(key="openai_api_error", accept_language="en")
+        == "AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요."
+    )
