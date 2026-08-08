@@ -58,7 +58,7 @@ app/
 - 의존 방향은 `Main·Router → Service → Repository → Core`입니다.
 - `app/main.py`는 router·middleware·model·DB 초기화를 조립하고 business rule을 구현하지 않습니다.
 - Router는 HTTP·form·template 변환, Service는 use case와 transaction, Repository는 DB 조회·변경만 담당합니다.
-- Repository는 `commit()`하지 않습니다. Service가 성공 시 `commit()`, 실패 시 `rollback()`합니다.
+- Repository는 `commit()`하지 않습니다. 쓰기 use case의 Service가 성공 시 `commit()`, 실패 시 `rollback()`합니다.
 - `app/chat`은 Auth가 제공한 `user_id: int`만 사용하며 cookie와 User 조회 방식을 알지 않습니다.
 - `app/admin`은 관리자 read-side 예외로 `app.auth.models.User`와
   `app.chat.models.ChatExchange` ORM model을 read-only query에 직접 사용할 수 있습니다. Admin은
@@ -154,22 +154,25 @@ from app.chat.service import (
 - `get_chat_exchange()`는 `chat_exchange_id`와 `user_id`를 함께 조건으로 조회합니다. 없는 ID와
   다른 사용자의 ID는 모두 `None`을 반환하고 Router가 같은 `404`로 변환합니다.
 
-### Admin → Auth·Chat·UI
+### Admin → Auth·UI·Main
 
 ```python
 from app.admin.service import list_admin_chat_operation_metadata
+from app.admin.router import router as admin_router
+from app.auth.dependencies import require_admin
 ```
 
-- `app/admin/router.py`가 `GET /admin/logs` HTTP use case를 소유하고 `require_admin`과 Admin
-  Service를 연결합니다.
+- `app/admin/router.py`가 `GET /admin/logs` HTTP use case를 소유하고 `require_admin`·`get_db`
+  dependency와 Admin Service를 연결합니다.
 - Admin Repository는 `chat_exchanges`를 기준으로 `users`를 `ChatExchange.user_id == User.id`로
   `LEFT JOIN`하는 read-only query를 수행합니다. 대응 User가 없는 ChatExchange record도 유지하며
   `username: str | None`으로 제공합니다.
 - Admin Service는 정확히 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
   `user_agent`, `response_time_ms`, `status`, `error_code`의 9-field projection만 제공합니다.
   `question`, `answer`, `error_message`, `password_hash`와 그 밖의 민감정보는 포함하지 않습니다.
-- Admin은 별도 JSON API, 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table을 제공하지
-  않습니다.
+- Admin은 별도 JSON API, 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table, 별도
+  역할·권한 table을 제공하지 않습니다. 사용자 역할은 `users.role`을 사용합니다.
+- Main은 `admin_router` 등록만 담당합니다.
 
 ### UI·Main integration
 

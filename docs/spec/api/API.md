@@ -30,7 +30,7 @@
 | `POST` | `/login` | 세션 생성 후 `303 /chat` | 동일 화면 `400` | 로그인 처리 |
 | `POST` | `/logout` | 세션 삭제 후 `303 /login` | 비로그인도 `303 /login` | 로그아웃 처리 |
 | `GET` | `/chat` | 본인 이전 대화와 입력창을 포함한 `200 chat.html` | 비로그인 `303 /login` | 채팅·사용자 대화 로그 화면 |
-| `GET` | `/admin/logs` | 관리자 `200 admin_logs.html` | 비로그인 `303 /login`, 비관리자 `403` | 관리자 전용 채팅 운영 metadata 조회 화면 |
+| `GET` | `/admin/logs` | 관리자 `200 admin_logs.html` | 비로그인 `303 /login`, 비관리자 `403` | `app/admin/router.py`가 소유하는 관리자 전용 채팅 운영 metadata 조회 화면 |
 
 - form 성공 후 이동은 모두 `303 See Other`를 사용합니다.
 - `username`: 앞뒤 공백 제거 후 3~30자, `password`: 8~72자입니다.
@@ -55,9 +55,13 @@
 
 - 기본 조회 항목: `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
   `user_agent`, `response_time_ms`, `status`, `error_code`
-- 질문·답변 원문과 내부 `error_message`는 기본 표시 대상에서 제외합니다.
-- `require_admin`이 server에서 접근을 판별하며 UI는 관리자 여부를 최종 판별하지 않습니다.
-- 관리자 수정·삭제 CRUD, 역할 table, 고급 검색과 pagination은 제공하지 않습니다.
+- `app/admin/router.py`가 `require_admin`으로 접근을 검사하고 Admin Service의 projection을
+  `admin_logs.html`에 전달합니다. UI는 route와 관리자 데이터 조합을 담당하지 않습니다.
+- 질문·답변 원문, 내부 `error_message`, `password_hash`와 그 밖의 민감정보는 projection과 화면에서
+  제외합니다.
+- 별도 관리자 JSON API, 관리자 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table은
+  제공하지 않습니다.
+- 별도 역할·권한 table은 추가하지 않으며 사용자 역할은 `users.role`을 사용합니다.
 
 ## 3. JSON 경로
 
