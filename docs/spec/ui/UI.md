@@ -11,6 +11,8 @@
   호출합니다.
 - Frontend는 별도 build 과정 없이 HTML, CSS, vanilla JavaScript로 구성합니다.
 - 화면 router는 Auth·Chat Service만 호출하고 Repository와 OpenAI를 직접 호출하지 않습니다.
+  관리자 화면의 `/admin/logs` route와 관리자 데이터 조합은 `app/admin/router.py`가 소유하며,
+  `app/ui`는 `admin_logs.html`과 공통 CSS·JavaScript 등 표현 자원만 제공합니다.
 - 초기 버전에는 React 등 UI framework, 상태관리 library, toast package, streaming, 자동 retry,
   별도 animation library를 도입하지 않습니다.
 - 구체적인 색상, spacing, typography 값은 구현 세부사항입니다. 다만 모든 화면에서 같은 시각
@@ -130,7 +132,8 @@
 
 ##### 사용할 API 경로
 
-- 추후 추가 예정입니다.
+- 별도 JSON API는 사용하지 않습니다. `app/admin/router.py`가 Admin Service의 9-field projection을
+  `admin_logs.html`에 전달합니다.
 
 ##### 응답 JSON
 
@@ -138,6 +141,7 @@
 - 비로그인 사용자는 `303 /login`으로 이동하고 비관리자는 `403`을 반환합니다.
 - 관리자 화면에는 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
   `user_agent`, `response_time_ms`, `status`, `error_code` field를 제공합니다.
+- `app/ui`는 `/admin/logs`의 접근 제어와 관리자 데이터 조합을 담당하지 않습니다.
 
 ### `/logout`
 
@@ -304,6 +308,8 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
 
 - `/admin/logs`는 server runtime log file이 아니라 `chat_exchanges`에 저장된 사용자별 운영
   metadata를 읽기 전용 table로 표시합니다.
+- `app/admin/router.py`가 route와 `require_admin` 기반 접근 제어를 소유하고, `app/ui`는
+  `admin_logs.html`과 공통 static 표현 자원만 제공합니다.
 - Logout button은 `POST /logout` form으로 동작하며, `/chat`으로 돌아가는 link를 함께
   제공합니다.
 - 기본 column은 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
@@ -313,7 +319,8 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
 - `status`와 `error_code`는 색상만으로 구분하지 않고 text를 그대로 제공합니다.
 - 질문·답변 원문, 내부 `error_message`, password와 `password_hash`는 표시하거나 DOM에 포함하지
   않습니다.
-- 수정·삭제 action, 고급 검색, pagination은 제공하지 않습니다.
+- 별도 관리자 JSON API, 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table은 제공하지
+  않습니다.
 - Table에는 내용을 설명하는 caption과 column별 header를 제공합니다.
 - 좁은 화면에서는 table column을 숨겨 의미를 잃게 하지 않고 table container에 가로 scroll을
   제공합니다.

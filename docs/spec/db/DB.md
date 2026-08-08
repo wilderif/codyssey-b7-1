@@ -90,12 +90,18 @@ ORDER BY created_at DESC, id DESC;
 
 ### 관리자 운영 metadata 조회
 
-관리자 화면은 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
-`response_time_ms`, `status`, `error_code`만 읽기 전용으로 조회합니다. 질문·답변 원문,
-`error_message`, `password_hash`는 기본 조회 대상이 아닙니다.
+`app/admin/repository.py`는 `chat_exchanges`를 기준으로 `users`를
+`ChatExchange.user_id == User.id` 조건으로 `LEFT JOIN`하는 read-only query를 수행합니다. Admin
+Repository는 `app.auth.models.User`와 `app.chat.models.ChatExchange` ORM model을 직접 read-only로
+사용할 수 있으며 Auth·Chat Service 또는 Repository를 호출하지 않습니다.
 
-이 projection은 Chat Service의 `list_admin_chat_operation_metadata()`가 사용하며, UI는
-Repository를 직접 조회하지 않습니다.
+관리자 projection은 정확히 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
+`user_agent`, `response_time_ms`, `status`, `error_code`만 반환합니다. 대응 User가 없는
+ChatExchange record도 유지하고 `username: str | None`을 허용합니다. `question`, `answer`,
+`error_message`, `password_hash`와 그 밖의 민감정보는 select·projection에 포함하지 않습니다.
+
+이 조회를 위해 별도 관리자 JSON API, 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table은
+추가하지 않습니다.
 
 ## 5. 저장 정책
 
