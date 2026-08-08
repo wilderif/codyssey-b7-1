@@ -135,19 +135,6 @@ from app.chat.service import (
 )
 ```
 
-```python
-async def process_chat(*, user_id: int, message: str, db: Session) -> ChatResult: ...
-def list_admin_chat_operation_metadata(
-    *, db: Session
-) -> list[AdminChatOperationMetadataItem]: ...
-def list_chat_exchange_history(
-    *, user_id: int, db: Session
-) -> list[ChatExchangeHistoryItem]: ...
-def get_chat_exchange(
-    *, user_id: int, chat_exchange_id: int, db: Session
-) -> ChatExchangeHistoryItem | None: ...
-```
-
 - `process_chat()`은 질문 검증, 최근 성공 문맥 5개, OpenAI 호출과 성공·실패 record 저장을
   책임집니다. 성공 또는 실패 record 저장이 완료된 뒤 결과나 OpenAI 오류를 반환합니다.
 - DB 저장 실패는 rollback하고 `500`을 `502`·`504`보다 우선합니다.
