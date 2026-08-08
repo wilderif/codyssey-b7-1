@@ -18,9 +18,11 @@ from app.auth.models import User
 from app.chat.context import ChatMessage
 from app.chat.errors import (
     AppError,
+    ChatConfigurationError,
     ChatGenerationError,
     ChatPersistenceError,
     ChatTimeoutError,
+    ChatValidationError,
 )
 from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
@@ -133,6 +135,42 @@ def test_post_chat_returns_contract_and_passes_user_agent(
         "user_agent": "router-test/1.0",
         "db": ANY,
     }
+
+
+@pytest.mark.parametrize(
+    ("header_value", "expected_user_agent"),
+    [
+        ("a" * 512, "a" * 512),
+        ("b" * 513, "b" * 512),
+    ],
+)
+def test_post_chat_limits_persisted_user_agent_to_database_boundary(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    header_value: str,
+    expected_user_agent: str,
+) -> None:
+    from app.chat import router as router_module
+
+    _login(app, user_id)
+    received: dict[str, object] = {}
+
+    async def fake_process_chat(**kwargs: object) -> ChatResult:
+        received.update(kwargs)
+        return ChatResult(1, "answer", datetime(2026, 8, 7, tzinfo=UTC))
+
+    monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "question"},
+        headers={"user-agent": header_value},
+    )
+
+    assert response.status_code == 200
+    assert received["user_agent"] == expected_user_agent
 
 
 def test_post_chat_requires_login(client: TestClient) -> None:
@@ -250,6 +288,21 @@ def test_unhandled_error_log_hides_internal_error_detail(
     assert "secret_cookie" not in caplog.text
 
 
+def test_non_api_unhandled_error_preserves_framework_server_error(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    @app.get("/non-api-fail")
+    def non_api_fail() -> None:
+        raise RuntimeError("non-api failure")
+
+    response = client.get("/non-api-fail")
+
+    assert response.status_code == 500
+    assert "internal_error" not in response.text
+    assert response.headers.get("content-type", "") != "application/json"
+
+
 class _AnswerGenerator:
     def __init__(self, error: ChatGenerationError | None = None) -> None:
         self._error = error
@@ -313,7 +366,7 @@ def test_service_success_logs_request_ai_and_db_events_with_request_id(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "chat_request_received",
+            "request_received",
             "ai_call_started",
             "ai_call_succeeded",
             "db_save_succeeded",
@@ -350,7 +403,7 @@ def test_service_failure_logs_safe_ai_and_db_failure_events_with_request_id(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "chat_request_received",
+            "request_received",
             "ai_call_started",
             "ai_call_succeeded",
             "db_save_failed",
@@ -387,11 +440,72 @@ def test_service_generation_failure_logs_safe_ai_and_db_events_with_request_id(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "chat_request_received",
+            "request_received",
             "ai_call_started",
             "ai_call_failed",
             "db_save_succeeded",
         },
+    )
+
+
+def test_production_wrapper_logs_request_id_before_validation_failure(
+    db: Session,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.chat import service as service_module
+
+    monkeypatch.setattr(service_module, "uuid4", lambda: "wrapper-validation-id")
+
+    with (
+        caplog.at_level("INFO", logger="app.chat.service"),
+        pytest.raises(ChatValidationError),
+    ):
+        asyncio.run(
+            service_module.process_chat(
+                user_id=1,
+                message="   ",
+                user_agent="Cookie secret",
+                db=db,
+            )
+        )
+
+    assert _service_log_messages(caplog) == [
+        "request_received request_id=wrapper-validation-id"
+    ]
+
+
+def test_production_wrapper_logs_safe_request_id_before_client_configuration_failure(
+    db: Session,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.chat import service as service_module
+
+    monkeypatch.setattr(service_module, "uuid4", lambda: "wrapper-config-id")
+
+    def fail_client_creation() -> object:
+        raise ChatConfigurationError()
+
+    monkeypatch.setattr(service_module, "create_openai_client", fail_client_creation)
+
+    with (
+        caplog.at_level("INFO", logger="app.chat.service"),
+        pytest.raises(ChatConfigurationError),
+    ):
+        asyncio.run(
+            service_module.process_chat(
+                user_id=1,
+                message="SELECT stack api-key Cookie internal error_message",
+                user_agent="Cookie secret",
+                db=db,
+            )
+        )
+
+    _assert_safe_request_id_logs(
+        _service_log_messages(caplog),
+        request_id="wrapper-config-id",
+        expected_events={"request_received"},
     )
 
 
@@ -472,6 +586,27 @@ def test_single_history_hides_other_users_as_not_found(
             "detail": "대화 기록을 찾을 수 없습니다.",
         }
     )
+
+
+def test_single_history_non_integer_id_returns_structured_validation_error(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+) -> None:
+    _login(app, user_id)
+
+    response = client.get("/api/chat-exchanges/not-an-integer")
+    openapi = app.openapi()
+    response_schema = openapi["paths"]["/api/chat-exchanges/{chat_exchange_id}"]["get"][
+        "responses"
+    ]["422"]["content"]["application/json"]["schema"]
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "validation_error",
+        "detail": "요청 형식이 올바르지 않습니다.",
+    }
+    assert response_schema == {"$ref": "#/components/schemas/ErrorResponse"}
 
 
 @pytest.mark.parametrize(

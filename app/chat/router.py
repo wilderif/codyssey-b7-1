@@ -61,7 +61,7 @@ async def post_chat(
         result = await process_chat(
             user_id=user_id,
             message=payload.message,
-            user_agent=request.headers.get("user-agent"),
+            user_agent=_normalize_user_agent(request.headers.get("user-agent")),
             db=db,
         )
     except ChatValidationError as error:
@@ -101,6 +101,7 @@ def get_chat_exchanges(
     response_model=ChatExchangeResponse,
     responses={
         401: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         500: {"model": ErrorResponse},
     },
@@ -125,7 +126,7 @@ def get_chat_exchange_by_id(
     return ChatExchangeResponse.model_validate(exchange)
 
 
-async def app_error_handler(request: Request, error: Exception) -> JSONResponse:
+async def app_error_handler(request: Request, error: Exception) -> Response:
     """AppError를 locale-aware JSON 오류로 변환한다."""
 
     if not isinstance(error, AppError):
@@ -164,11 +165,11 @@ async def http_exception_handler(request: Request, error: Exception) -> Response
     return _error_response(request=request, status_code=500, code="internal_error")
 
 
-async def unhandled_exception_handler(
-    request: Request, _error: Exception
-) -> JSONResponse:
+async def unhandled_exception_handler(request: Request, _error: Exception) -> Response:
     """예상하지 못한 예외를 안전한 내부 오류로 변환한다."""
 
+    if not request.url.path.startswith("/api/"):
+        raise _error
     return _error_response(request=request, status_code=500, code="internal_error")
 
 
@@ -178,6 +179,12 @@ def _validation_app_error(error: ChatValidationError) -> AppError:
         ChatValidationReason.MESSAGE_TOO_LONG: "message_too_long",
     }[error.reason]
     return AppError(status_code=400, code="validation_error", detail_key=detail_key)
+
+
+def _normalize_user_agent(user_agent: str | None) -> str | None:
+    """운영 metadata column 길이 안에서 User-Agent를 보관한다."""
+
+    return user_agent[:512] if user_agent is not None else None
 
 
 def _error_response(
