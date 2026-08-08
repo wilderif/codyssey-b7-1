@@ -39,7 +39,7 @@ class ChatTimeoutError(ChatGenerationError):
 class ChatInvalidResponseError(ChatGenerationError):
     """OpenAI response에 사용할 수 있는 text answer가 없다."""
 
-    record_message = "openai_invalid_response"
+    record_message = "openai_api_error"
 
 
 class ChatConfigurationError(ChatError):

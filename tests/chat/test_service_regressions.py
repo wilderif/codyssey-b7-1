@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import app.chat.service as service_module
 from app.chat.context import ChatMessage
-from app.chat.errors import ChatValidationError
+from app.chat.errors import ChatPersistenceError, ChatValidationError
 from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
 from app.chat.service import AnswerGenerator, ChatService
@@ -69,7 +69,14 @@ def test_validation_error_identifies_the_invalid_rule(
     service = create_service(db, StaticAnswerGenerator())
 
     with pytest.raises(ChatValidationError) as captured:
-        asyncio.run(service.process_chat(user_id=user_id, message=message))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message=message,
+                request_id="validation-request",
+                user_agent=None,
+            )
+        )
 
     assert captured.value.reason == expected_reason
 
@@ -85,7 +92,14 @@ def test_production_wrapper_validates_before_creating_openai_client(
     monkeypatch.setattr(service_module, "create_openai_client", fail_if_called)
 
     with pytest.raises(ChatValidationError) as captured:
-        asyncio.run(service_module.process_chat(user_id=user_id, message=" ", db=db))
+        asyncio.run(
+            service_module.process_chat(
+                user_id=user_id,
+                message=" ",
+                user_agent=None,
+                db=db,
+            )
+        )
 
     assert captured.value.reason == "empty_message"
 
@@ -96,7 +110,14 @@ def test_context_read_transaction_ends_before_answer_generation(
 ) -> None:
     service = create_service(db, TransactionCheckingGenerator(db))
 
-    result = asyncio.run(service.process_chat(user_id=user_id, message="question"))
+    result = asyncio.run(
+        service.process_chat(
+            user_id=user_id,
+            message="question",
+            request_id="transaction-request",
+            user_agent=None,
+        )
+    )
 
     assert result.answer == "answer"
 
@@ -108,7 +129,14 @@ def test_unexpected_generator_error_is_not_reclassified_or_persisted(
     service = create_service(db, UnexpectedErrorGenerator())
 
     with pytest.raises(RuntimeError, match="unexpected generator failure"):
-        asyncio.run(service.process_chat(user_id=user_id, message="question"))
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="unexpected-error-request",
+                user_agent=None,
+            )
+        )
 
     saved = db.scalar(select(ChatExchange).where(ChatExchange.question == "question"))
     assert saved is None
@@ -120,7 +148,63 @@ def test_success_does_not_start_a_new_transaction_after_commit(
 ) -> None:
     service = create_service(db, StaticAnswerGenerator())
 
-    result = asyncio.run(service.process_chat(user_id=user_id, message="question"))
+    result = asyncio.run(
+        service.process_chat(
+            user_id=user_id,
+            message="question",
+            request_id="success-transaction-request",
+            user_agent=None,
+        )
+    )
 
     assert result.chat_exchange_id > 0
     assert not db.in_transaction()
+
+
+class FailingSaveRepository(SqlAlchemyChatExchangeRepository):
+    """저장 시도 횟수를 기록하고 첫 save를 실패시키는 repository다."""
+
+    def __init__(self, *, db: Session) -> None:
+        super().__init__(db=db)
+        self.save_attempts = 0
+
+    def create_success_exchange(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        answer: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
+    ) -> ChatExchange:
+        self.save_attempts += 1
+        raise RuntimeError("database save failed")
+
+
+def test_save_failure_does_not_attempt_to_persist_another_failure_record(
+    db: Session,
+    user_id: int,
+) -> None:
+    repository = FailingSaveRepository(db=db)
+    service = ChatService(
+        db=db,
+        repository=repository,
+        answer_generator=StaticAnswerGenerator(),
+    )
+
+    with pytest.raises(ChatPersistenceError):
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="save-failure-request",
+                user_agent=None,
+            )
+        )
+
+    assert repository.save_attempts == 1
+    assert (
+        db.scalar(select(ChatExchange).where(ChatExchange.question == "question"))
+        is None
+    )
