@@ -8,7 +8,9 @@ from typing import Literal, TypedDict
 from app.chat.models import ChatExchange
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant. Answer clearly and concisely in the user's language."
+    "You are a helpful assistant. "
+    "Answer clearly and concisely in the user's language. "
+    "Use plain text only and do not use Markdown formatting."
 )
 
 
