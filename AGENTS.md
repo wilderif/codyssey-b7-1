@@ -35,6 +35,7 @@ Git 또는 GitHub 작업 전에는 작업에 따라
 | Architecture·module 경계 | [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md) |
 | API 계약 | [`docs/spec/api/API.md`](docs/spec/api/API.md) |
 | DB schema 계약 | [`docs/spec/db/DB.md`](docs/spec/db/DB.md) |
+| Frontend UI 계약 | [`docs/spec/ui/UI.md`](docs/spec/ui/UI.md) |
 | Git·GitHub 규칙 | [`docs/rules/git-rules.md`](docs/rules/git-rules.md), [`docs/rules/github-rules.md`](docs/rules/github-rules.md) |
 
 ## 저장소 규칙

@@ -90,7 +90,7 @@ ORDER BY created_at DESC, id DESC;
 
 ### 관리자 운영 metadata 조회
 
-관리자 화면은 사용자 식별 정보, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
+관리자 화면은 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
 `response_time_ms`, `status`, `error_code`만 읽기 전용으로 조회합니다. 질문·답변 원문,
 `error_message`, `password_hash`는 기본 조회 대상이 아닙니다.
 
