@@ -126,6 +126,20 @@ class ChatService:
                 error_code=error.record_message,
             )
             raise
+        except Exception:
+            logger.warning(
+                "ai_call_failed request_id=%s code=internal_error", request_id
+            )
+            self._save_failed_exchange(
+                user_id=user_id,
+                question=question,
+                error_message="internal_error",
+                request_id=request_id,
+                user_agent=user_agent,
+                response_time_ms=_elapsed_time_ms(started_at),
+                error_code="internal_error",
+            )
+            raise
 
         try:
             exchange = self._repository.create_success_exchange(

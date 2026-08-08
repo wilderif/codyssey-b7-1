@@ -127,24 +127,47 @@ def test_context_read_transaction_ends_before_answer_generation(
     assert result.answer == "answer"
 
 
-def test_unexpected_generator_error_is_not_reclassified_or_persisted(
+def test_unexpected_generator_error_persists_internal_failure_and_propagates(
     db: Session,
     user_id: int,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     service = create_service(db, UnexpectedErrorGenerator())
 
-    with pytest.raises(RuntimeError, match="unexpected generator failure"):
+    with (
+        caplog.at_level("INFO", logger="app.chat.service"),
+        pytest.raises(RuntimeError, match="unexpected generator failure"),
+    ):
         asyncio.run(
             service.process_chat(
                 user_id=user_id,
                 message="question",
                 request_id="unexpected-error-request",
-                user_agent=None,
+                user_agent="test-agent/1.0",
             )
         )
 
     saved = db.scalar(select(ChatExchange).where(ChatExchange.question == "question"))
-    assert saved is None
+    assert saved is not None
+    assert (
+        saved.answer,
+        saved.status,
+        saved.error_message,
+        saved.error_code,
+        saved.request_id,
+        saved.user_agent,
+    ) == (
+        None,
+        "failed",
+        "internal_error",
+        "internal_error",
+        "unexpected-error-request",
+        "test-agent/1.0",
+    )
+    assert (
+        "ai_call_failed request_id=unexpected-error-request code=internal_error"
+        in caplog.text
+    )
 
 
 def test_success_does_not_start_a_new_transaction_after_commit(
