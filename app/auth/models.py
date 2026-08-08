@@ -10,6 +10,9 @@ from sqlalchemy.types import TypeDecorator
 
 from app.core.database import Base
 
+USER_ROLE = "user"
+ADMIN_ROLE = "admin"
+
 
 def utc_now() -> datetime:
     """UTC timezone 정보를 포함한 현재 시각을 반환한다."""
@@ -58,6 +61,11 @@ class User(Base):
         nullable=False,
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=USER_ROLE,
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(),
         nullable=False,
