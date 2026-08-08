@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import app.chat.service as service_module
 from app.chat.context import ChatMessage
-from app.chat.errors import ChatValidationError
+from app.chat.errors import ChatPersistenceError, ChatValidationError
 from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
 from app.chat.service import AnswerGenerator, ChatService
@@ -159,3 +159,52 @@ def test_success_does_not_start_a_new_transaction_after_commit(
 
     assert result.chat_exchange_id > 0
     assert not db.in_transaction()
+
+
+class FailingSaveRepository(SqlAlchemyChatExchangeRepository):
+    """저장 시도 횟수를 기록하고 첫 save를 실패시키는 repository다."""
+
+    def __init__(self, *, db: Session) -> None:
+        super().__init__(db=db)
+        self.save_attempts = 0
+
+    def create_success_exchange(
+        self,
+        *,
+        user_id: int,
+        question: str,
+        answer: str,
+        request_id: str,
+        user_agent: str | None,
+        response_time_ms: int,
+    ) -> ChatExchange:
+        self.save_attempts += 1
+        raise RuntimeError("database save failed")
+
+
+def test_save_failure_does_not_attempt_to_persist_another_failure_record(
+    db: Session,
+    user_id: int,
+) -> None:
+    repository = FailingSaveRepository(db=db)
+    service = ChatService(
+        db=db,
+        repository=repository,
+        answer_generator=StaticAnswerGenerator(),
+    )
+
+    with pytest.raises(ChatPersistenceError):
+        asyncio.run(
+            service.process_chat(
+                user_id=user_id,
+                message="question",
+                request_id="save-failure-request",
+                user_agent=None,
+            )
+        )
+
+    assert repository.save_attempts == 1
+    assert (
+        db.scalar(select(ChatExchange).where(ChatExchange.question == "question"))
+        is None
+    )

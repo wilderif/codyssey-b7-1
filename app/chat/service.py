@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -31,6 +32,8 @@ from app.chat.repository import (
 
 CONTEXT_HISTORY_LIMIT = 5
 MAX_MESSAGE_LENGTH = 1000
+
+logger = logging.getLogger(__name__)
 
 
 class AnswerGenerator(Protocol):
@@ -133,6 +136,7 @@ class ChatService:
             self._db.commit()
         except Exception as error:
             self._db.rollback()
+            logger.error("db_save_failed")
             raise ChatPersistenceError() from error
 
         return result
@@ -161,6 +165,7 @@ class ChatService:
             self._db.commit()
         except Exception as error:
             self._db.rollback()
+            logger.error("db_save_failed")
             raise ChatPersistenceError() from error
 
 
