@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
+import pytest
 
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
+
+_VALID_SALT_HEX = "00" * 16
+_VALID_DERIVED_KEY_HEX = "00" * 32
 
 
 def test_hash_password_creates_verifiable_non_plaintext_hash() -> None:
@@ -14,7 +16,7 @@ def test_hash_password_creates_verifiable_non_plaintext_hash() -> None:
     hashed = hash_password(password)
 
     assert hashed != password
-    assert _verify_password(password=password, encoded_hash=hashed)
+    assert verify_password(password, hashed)
 
 
 def test_hash_password_uses_a_unique_salt() -> None:
@@ -24,8 +26,8 @@ def test_hash_password_uses_a_unique_salt() -> None:
     second_hash = hash_password(password)
 
     assert first_hash != second_hash
-    assert _verify_password(password=password, encoded_hash=first_hash)
-    assert _verify_password(password=password, encoded_hash=second_hash)
+    assert verify_password(password, first_hash)
+    assert verify_password(password, second_hash)
 
 
 def test_hash_password_stores_algorithm_parameters_and_random_salt() -> None:
@@ -37,15 +39,24 @@ def test_hash_password_stores_algorithm_parameters_and_random_salt() -> None:
     assert len(bytes.fromhex(derived_key)) == 32
 
 
-def _verify_password(*, password: str, encoded_hash: str) -> bool:
-    algorithm, iterations, salt_hex, derived_key_hex = encoded_hash.split("$")
-    assert algorithm == "pbkdf2_sha256"
+def test_verify_password_rejects_wrong_password() -> None:
+    encoded_hash = hash_password("correct-password")
 
-    candidate = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        bytes.fromhex(salt_hex),
-        int(iterations),
-        dklen=32,
-    )
-    return hmac.compare_digest(candidate, bytes.fromhex(derived_key_hex))
+    assert not verify_password("wrong-password", encoded_hash)
+
+
+@pytest.mark.parametrize(
+    "encoded_hash",
+    [
+        "not-a-password-hash",
+        f"unsupported$600000${_VALID_SALT_HEX}${_VALID_DERIVED_KEY_HEX}",
+        f"pbkdf2_sha256$invalid${_VALID_SALT_HEX}${_VALID_DERIVED_KEY_HEX}",
+        f"pbkdf2_sha256$1${_VALID_SALT_HEX}${_VALID_DERIVED_KEY_HEX}",
+        f"pbkdf2_sha256$600000$invalid${_VALID_DERIVED_KEY_HEX}",
+        f"pbkdf2_sha256$600000${_VALID_SALT_HEX}$00",
+    ],
+)
+def test_verify_password_rejects_malformed_or_unsupported_hash(
+    encoded_hash: str,
+) -> None:
+    assert not verify_password("password", encoded_hash)
