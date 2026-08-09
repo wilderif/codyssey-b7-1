@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from starlette.datastructures import MutableHeaders
@@ -10,6 +11,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 REQUEST_ID_HEADER = "X-Request-ID"
 REQUEST_ID_STATE_KEY = "request_id"
+
+logger = logging.getLogger(__name__)
 
 
 class RequestIdMiddleware:
@@ -30,6 +33,8 @@ class RequestIdMiddleware:
 
         request_id = str(uuid4())
         scope.setdefault("state", {})[REQUEST_ID_STATE_KEY] = request_id
+        if scope["method"] == "POST" and scope["path"] == "/api/chat":
+            logger.info("request_received request_id=%s", request_id)
 
         async def send_with_request_id(message: Message) -> None:
             if message["type"] == "http.response.start":

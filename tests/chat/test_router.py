@@ -140,6 +140,56 @@ def test_post_chat_returns_contract_and_passes_user_agent(
     }
 
 
+def test_post_chat_logs_request_received_once_with_response_request_id(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.chat import router as router_module
+
+    _login(app, user_id)
+
+    async def fake_process_chat(**_kwargs: object) -> ChatResult:
+        return ChatResult(1, "answer", datetime(2026, 8, 7, tzinfo=UTC))
+
+    monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
+    sensitive_values = {
+        "SELECT password_hash FROM users",
+        "Cookie=session-secret",
+        "Bearer authorization-secret",
+        "private-user-agent/1.0",
+    }
+
+    with caplog.at_level("INFO", logger="app.core.request_id"):
+        response = client.post(
+            "/api/chat",
+            json={"message": "SELECT password_hash FROM users"},
+            headers={
+                "authorization": "Bearer authorization-secret",
+                "cookie": "Cookie=session-secret",
+                "user-agent": "private-user-agent/1.0",
+            },
+        )
+
+    assert response.status_code == 200
+    request_received_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.core.request_id"
+        and record.getMessage().startswith("request_received ")
+    ]
+    assert request_received_messages == [
+        f"request_received request_id={response.headers['x-request-id']}"
+    ]
+    assert not any(
+        sensitive_value in message
+        for message in request_received_messages
+        for sensitive_value in sensitive_values
+    )
+
+
 @pytest.mark.parametrize(
     ("header_value", "expected_user_agent"),
     [
@@ -176,14 +226,23 @@ def test_post_chat_limits_persisted_user_agent_to_database_boundary(
     assert received["user_agent"] == expected_user_agent
 
 
-def test_post_chat_requires_login(client: TestClient) -> None:
-    response = client.post("/api/chat", json={"message": "question"})
+def test_post_chat_logs_request_received_before_login_check(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level("INFO", logger="app.core.request_id"):
+        response = client.post("/api/chat", json={"message": "question"})
 
     assert response.status_code == 401
     assert response.json() == {
         "code": "not_authenticated",
         "detail": "로그인이 필요합니다.",
     }
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.core.request_id"
+    ] == [f"request_received request_id={response.headers['x-request-id']}"]
 
 
 @pytest.mark.parametrize(
@@ -202,33 +261,48 @@ def test_post_chat_distinguishes_domain_and_request_validation(
     payload: dict[str, object],
     status_code: int,
     detail: str,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     _login(app, user_id)
 
-    response = client.post("/api/chat", json=payload)
+    with caplog.at_level("INFO", logger="app.core.request_id"):
+        response = client.post("/api/chat", json=payload)
 
     assert response.status_code == status_code
     assert response.json() == {"code": "validation_error", "detail": detail}
+    if status_code == 422:
+        assert [
+            record.getMessage()
+            for record in caplog.records
+            if record.name == "app.core.request_id"
+        ] == [f"request_received request_id={response.headers['x-request-id']}"]
 
 
 def test_post_chat_returns_validation_error_for_malformed_json(
     app: FastAPI,
     client: TestClient,
     user_id: int,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     _login(app, user_id)
 
-    response = client.post(
-        "/api/chat",
-        content="{",
-        headers={"content-type": "application/json"},
-    )
+    with caplog.at_level("INFO", logger="app.core.request_id"):
+        response = client.post(
+            "/api/chat",
+            content="{",
+            headers={"content-type": "application/json"},
+        )
 
     assert response.status_code == 422
     assert response.json() == {
         "code": "validation_error",
         "detail": "요청 형식이 올바르지 않습니다.",
     }
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.core.request_id"
+    ] == [f"request_received request_id={response.headers['x-request-id']}"]
 
 
 @pytest.mark.parametrize(
@@ -400,7 +474,7 @@ def _assert_safe_request_id_logs(
         assert secret not in log_text
 
 
-def test_service_success_logs_request_ai_and_db_events_with_request_id(
+def test_service_success_logs_ai_and_db_events_with_request_id(
     db: Session,
     user_id: int,
     caplog: pytest.LogCaptureFixture,
@@ -426,7 +500,6 @@ def test_service_success_logs_request_ai_and_db_events_with_request_id(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "request_received",
             "ai_call_started",
             "ai_call_succeeded",
             "db_save_succeeded",
@@ -463,7 +536,6 @@ def test_service_failure_logs_safe_ai_and_db_failure_events_with_request_id(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "request_received",
             "ai_call_started",
             "ai_call_succeeded",
             "db_save_failed",
@@ -500,7 +572,6 @@ def test_service_generation_failure_logs_safe_ai_and_db_events_with_request_id(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "request_received",
             "ai_call_started",
             "ai_call_failed",
             "db_save_succeeded",
@@ -508,7 +579,7 @@ def test_service_generation_failure_logs_safe_ai_and_db_events_with_request_id(
     )
 
 
-def test_production_wrapper_logs_request_id_before_validation_failure(
+def test_production_wrapper_does_not_log_before_validation_failure(
     db: Session,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -528,12 +599,10 @@ def test_production_wrapper_logs_request_id_before_validation_failure(
             )
         )
 
-    assert _service_log_messages(caplog) == [
-        "request_received request_id=wrapper-validation-id"
-    ]
+    assert _service_log_messages(caplog) == []
 
 
-def test_production_wrapper_logs_safe_request_id_before_client_configuration_failure(
+def test_production_wrapper_does_not_log_before_client_configuration_failure(
     db: Session,
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
@@ -559,11 +628,7 @@ def test_production_wrapper_logs_safe_request_id_before_client_configuration_fai
             )
         )
 
-    _assert_safe_request_id_logs(
-        _service_log_messages(caplog),
-        request_id="wrapper-config-id",
-        expected_events={"request_received"},
-    )
+    assert _service_log_messages(caplog) == []
 
 
 def test_history_is_isolated_and_hides_operational_metadata(

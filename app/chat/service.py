@@ -85,13 +85,10 @@ class ChatService:
         message: str,
         request_id: str,
         user_agent: str | None,
-        request_already_logged: bool = False,
     ) -> ChatResult:
         """질문을 처리하고 성공·실패 ChatExchange transaction을 완료한다."""
 
         started_at = time.perf_counter()
-        if not request_already_logged:
-            logger.info("request_received request_id=%s", request_id)
         question = _normalize_message(message)
         try:
             exchanges = self._repository.get_recent_success_exchanges(
@@ -202,7 +199,6 @@ async def process_chat(
 ) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
-    logger.info("request_received request_id=%s", request_id)
     normalized_message = _normalize_message(message)
     repository = SqlAlchemyChatExchangeRepository(db=db)
     async with create_openai_client() as client:
@@ -219,7 +215,6 @@ async def process_chat(
             message=normalized_message,
             request_id=request_id,
             user_agent=user_agent,
-            request_already_logged=True,
         )
 
 
