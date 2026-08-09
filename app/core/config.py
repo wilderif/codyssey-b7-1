@@ -7,6 +7,8 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+PUBLIC_SESSION_SECRET_PLACEHOLDER = "change-me-for-local-development"
+
 
 class Settings(BaseSettings):
     """공용 application 설정이다."""
@@ -94,6 +96,14 @@ class Settings(BaseSettings):
         if missing:
             raise ValueError(
                 "Production 환경에 필요한 설정이 없습니다: " + ", ".join(missing)
+            )
+        if (
+            self.session_secret is not None
+            and self.session_secret.get_secret_value()
+            == PUBLIC_SESSION_SECRET_PLACEHOLDER
+        ):
+            raise ValueError(
+                "Production 환경에서는 공개된 SESSION_SECRET placeholder를 사용할 수 없습니다."
             )
         return self
 
