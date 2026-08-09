@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import cast
 
 from openai import APIError, APITimeoutError, AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam
 
 from app.chat.context import ChatMessage
 from app.chat.errors import (
@@ -31,10 +29,7 @@ class OpenAIAnswerGenerator:
         try:
             completion = await self._client.chat.completions.create(
                 model=self._model,
-                messages=cast(
-                    list[ChatCompletionMessageParam],
-                    list(messages),
-                ),
+                messages=messages,
             )
         except APITimeoutError as error:
             raise ChatTimeoutError() from error

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
+from openai.types.chat import ChatCompletionMessageParam
 
 from app.chat.context import SYSTEM_PROMPT, build_context_messages
 from app.chat.models import ChatExchange
@@ -14,7 +17,7 @@ def test_build_context_orders_history_oldest_first_and_appends_question() -> Non
         ChatExchange(question="old question", answer="old answer"),
     ]
 
-    messages = build_context_messages(
+    messages: Sequence[ChatCompletionMessageParam] = build_context_messages(
         exchanges=exchanges,
         current_question="current question",
     )

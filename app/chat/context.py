@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Literal, TypedDict
+from typing import TypeAlias
+
+from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionUserMessageParam,
+)
 
 from app.chat.models import ChatExchange
 
@@ -14,11 +20,19 @@ SYSTEM_PROMPT = (
 )
 
 
-class ChatMessage(TypedDict):
-    """OpenAI 대화 message의 최소 구조다."""
+class SystemChatMessage(ChatCompletionSystemMessageParam):
+    """OpenAI system message의 최소 구조다."""
 
-    role: Literal["system", "user", "assistant"]
-    content: str
+
+class UserChatMessage(ChatCompletionUserMessageParam):
+    """OpenAI user message의 최소 구조다."""
+
+
+class AssistantChatMessage(ChatCompletionAssistantMessageParam):
+    """OpenAI assistant message의 최소 구조다."""
+
+
+ChatMessage: TypeAlias = SystemChatMessage | UserChatMessage | AssistantChatMessage
 
 
 def build_context_messages(
