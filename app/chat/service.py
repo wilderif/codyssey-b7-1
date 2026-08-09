@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
-from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -197,12 +196,12 @@ async def process_chat(
     *,
     user_id: int,
     message: str,
+    request_id: str,
     user_agent: str | None = None,
     db: Session,
 ) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
-    request_id = str(uuid4())
     logger.info("request_received request_id=%s", request_id)
     normalized_message = _normalize_message(message)
     repository = SqlAlchemyChatExchangeRepository(db=db)

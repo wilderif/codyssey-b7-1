@@ -28,6 +28,7 @@ from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
 from app.chat.service import ChatResult, ChatService
 from app.core.database import get_db
+from app.core.request_id import RequestIdMiddleware
 
 
 @pytest.fixture
@@ -47,6 +48,7 @@ def app(db: Session) -> Generator[FastAPI, None, None]:
         request.scope["session"] = {}
         return await call_next(request)
 
+    application.add_middleware(RequestIdMiddleware)
     application.include_router(router)
     application.add_exception_handler(
         RequestValidationError, validation_exception_handler
@@ -132,6 +134,7 @@ def test_post_chat_returns_contract_and_passes_user_agent(
     assert received == {
         "user_id": user_id,
         "message": "question",
+        "request_id": response.headers["x-request-id"],
         "user_agent": "router-test/1.0",
         "db": ANY,
     }
@@ -508,11 +511,8 @@ def test_service_generation_failure_logs_safe_ai_and_db_events_with_request_id(
 def test_production_wrapper_logs_request_id_before_validation_failure(
     db: Session,
     caplog: pytest.LogCaptureFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.chat import service as service_module
-
-    monkeypatch.setattr(service_module, "uuid4", lambda: "wrapper-validation-id")
 
     with (
         caplog.at_level("INFO", logger="app.chat.service"),
@@ -522,6 +522,7 @@ def test_production_wrapper_logs_request_id_before_validation_failure(
             service_module.process_chat(
                 user_id=1,
                 message="   ",
+                request_id="wrapper-validation-id",
                 user_agent="Cookie secret",
                 db=db,
             )
@@ -539,8 +540,6 @@ def test_production_wrapper_logs_safe_request_id_before_client_configuration_fai
 ) -> None:
     from app.chat import service as service_module
 
-    monkeypatch.setattr(service_module, "uuid4", lambda: "wrapper-config-id")
-
     def fail_client_creation() -> object:
         raise ChatConfigurationError()
 
@@ -554,6 +553,7 @@ def test_production_wrapper_logs_safe_request_id_before_client_configuration_fai
             service_module.process_chat(
                 user_id=1,
                 message="SELECT stack api-key Cookie internal error_message",
+                request_id="wrapper-config-id",
                 user_agent="Cookie secret",
                 db=db,
             )

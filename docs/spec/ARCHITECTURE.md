@@ -9,7 +9,7 @@
 | `app/auth` | User, 회원가입·login·logout, password 검증, 인증·관리자 dependency |
 | `app/chat` | 질문 검증, 최근 성공 대화 5개 문맥, OpenAI 호출, 사용자 ChatExchange 저장·조회 |
 | `app/admin` | 관리자 전용 route, read-only 통합 조회, 운영 metadata projection |
-| `app/core` | environment variable, SQLAlchemy Base·DB session, 보안, 공통 logging |
+| `app/core` | environment variable, SQLAlchemy Base·DB session, 보안, request ID, 공통 logging |
 | `app/ui` | Jinja2 화면 router, chat·본인 기록·관리자 template, CSS·JavaScript static asset |
 | SQLite | 사용자, 질문·답변 쌍, 상태, UTC 시각, 요청별 운영 metadata 저장 |
 | OpenAI API | 현재 질문과 사용자별 최근 성공 문맥으로 답변 생성 |
@@ -48,6 +48,7 @@ app/
 | `app/admin/**` | 관리자 전용 route, read-only 통합 query, 운영 metadata projection | 이상헌 |
 | `app/core/database.py` | SQLAlchemy Base, engine, session factory와 요청별 DB session | 이상헌 |
 | `app/core/config.py` | environment variable loading·type 변환·validation | 이상헌 |
+| `app/core/request_id.py` | HTTP request ID 생성·전달 interface | 김대웅 |
 | `app/core/security.py` | password·session 보안 helper | 김대웅 |
 | 공통 logging·health | log 설정과 필수 event 형식, `GET /health` | 김대웅 |
 | `app/ui/**` | HTML·form router, template, CSS·JavaScript, 화면 흐름 | 김우종 |
@@ -106,6 +107,18 @@ from app.core.database import Base, SessionLocal, get_db, init_db
 - `app/main.py`가 두 model을 import한 뒤 `init_db()`를 호출합니다.
 - SQLite에서는 `check_same_thread=False`와 foreign key 활성화를 적용합니다.
 
+### Request ID
+
+```python
+from app.core.request_id import RequestIdMiddleware, get_request_id
+```
+
+- `RequestIdMiddleware`는 HTTP request마다 server-generated UUID를 생성하고
+  `request.state.request_id`에 저장합니다.
+- client가 보낸 request ID는 신뢰하거나 server request ID로 재사용하지 않습니다.
+- `get_request_id()`는 Router가 현재 request ID를 Service에 전달하는 공용 interface입니다.
+- response의 `X-Request-ID`, server log와 `ChatExchange.request_id`는 같은 값을 사용합니다.
+
 ### Auth → UI·Chat
 
 ```python
@@ -148,6 +161,8 @@ from app.chat.service import (
 
 - `process_chat()`은 질문 검증, 최근 성공 문맥 5개, OpenAI 호출과 성공·실패 record 저장을
   책임집니다. 성공 또는 실패 record 저장이 완료된 뒤 결과나 OpenAI 오류를 반환합니다.
+- Chat Router는 공용 request ID interface에서 받은 ID를 `process_chat()`에 명시적으로
+  전달합니다.
 - DB 저장 실패는 rollback하고 `500`을 `502`·`504`보다 우선합니다.
 - History는 로그인 사용자의 record만 최신순으로 제공하며 내부 `error_message`와 운영
   metadata를 포함하지 않습니다.
