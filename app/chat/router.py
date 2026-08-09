@@ -33,6 +33,7 @@ from app.chat.schemas import (
 )
 from app.chat.service import get_chat_exchange, list_chat_exchange_history, process_chat
 from app.core.database import get_db
+from app.core.request_id import REQUEST_ID_HEADER, get_request_id
 
 router = APIRouter()
 
@@ -61,6 +62,7 @@ async def post_chat(
         result = await process_chat(
             user_id=user_id,
             message=payload.message,
+            request_id=get_request_id(request),
             user_agent=_normalize_user_agent(request.headers.get("user-agent")),
             db=db,
         )
@@ -170,7 +172,13 @@ async def unhandled_exception_handler(request: Request, _error: Exception) -> Re
 
     if not request.url.path.startswith("/api/"):
         raise _error
-    return _error_response(request=request, status_code=500, code="internal_error")
+    response = _error_response(
+        request=request,
+        status_code=500,
+        code="internal_error",
+    )
+    response.headers[REQUEST_ID_HEADER] = get_request_id(request)
+    return response
 
 
 def _validation_app_error(error: ChatValidationError) -> AppError:

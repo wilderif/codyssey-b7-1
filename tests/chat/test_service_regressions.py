@@ -101,6 +101,7 @@ def test_production_wrapper_validates_before_creating_openai_client(
             service_module.process_chat(
                 user_id=user_id,
                 message=" ",
+                request_id="production-validation-request",
                 user_agent=None,
                 db=db,
             )
