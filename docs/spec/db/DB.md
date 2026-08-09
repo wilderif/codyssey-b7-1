@@ -148,55 +148,40 @@ ChatExchange record도 유지하고 `username: str | None`을 허용합니다. `
 
 ## 7. 평가자 확인 방법
 
-> 🔎 아래 명령은 구현 후 실제 DB file이 생성된 뒤 실행합니다. `password_hash`는 확인
-> 출력에 포함하지 않습니다.
+> 🔎 아래 명령은 구현 후 실제 DB file이 생성된 뒤 실행합니다. `scripts/check_logs.sql`은
+> 운영 확인에 필요한 안전한 field만 출력합니다.
 
 ### sqlite3 CLI
 
 ```bash
-sqlite3 data/chatbot.db
-.headers on
-.mode column
-SELECT id, username, role, created_at FROM users ORDER BY id;
-SELECT id, user_id, question, answer, status, created_at,
-       request_id, user_agent, response_time_ms, error_code
-FROM chat_exchanges
-ORDER BY created_at DESC, id DESC;
-SELECT id, user_id, answer, status, error_message, created_at
-FROM chat_exchanges
-WHERE status = 'failed'
-ORDER BY created_at DESC, id DESC;
-SELECT user_id, COUNT(*) AS count
-FROM chat_exchanges
-GROUP BY user_id
-ORDER BY user_id;
+sqlite3 data/chatbot.db < scripts/check_logs.sql
 ```
+
+script는 사용자 역할, 최근 ChatExchange, 실패 ChatExchange의 `answer_is_null` 불변식,
+사용자별 ChatExchange 수, 운영 metadata, Admin 9-field projection을 순서대로 조회합니다.
+Admin projection은 `chat_exchanges LEFT JOIN users`를 기준으로 최신순이며 다음 field만
+출력합니다.
+
+```text
+user_id
+username
+chat_exchange_id
+created_at
+request_id
+user_agent
+response_time_ms
+status
+error_code
+```
+
+`password_hash`, 질문·답변 원문, 내부 오류 내용, Cookie, Authorization, secret은 script
+출력에 포함하지 않습니다.
 
 확인 항목:
 
 - `users.role`에 일반 사용자와 `settings.admin_username` 초기 관리자의 역할이 구분되어 저장됨
 - `chat_exchanges.user_id`가 로그인 사용자 `users.id`와 연결됨
-- 성공 record에 질문·답변·UTC 시각·`request_id`·`response_time_ms`가 존재함
+- 성공 record에 UTC 시각·`request_id`·`response_time_ms`가 존재함
 - 실패 record는 `answer IS NULL`, `status='failed'`이며 `error_code`로 실패 원인을 분류함
 - `request_method`, `request_path`는 DB 운영 metadata에 저장하지 않음
 - 사용자별 조회 결과가 서로 섞이지 않음
-
-### Python sqlite3 대체 명령
-
-```bash
-python - <<'PY'
-import sqlite3
-
-conn = sqlite3.connect("data/chatbot.db")
-conn.row_factory = sqlite3.Row
-
-for row in conn.execute(
-    "SELECT id, user_id, question, answer, status, created_at, "
-    "request_id, user_agent, response_time_ms, error_code "
-    "FROM chat_exchanges ORDER BY created_at DESC, id DESC"
-):
-    print(dict(row))
-
-conn.close()
-PY
-```
