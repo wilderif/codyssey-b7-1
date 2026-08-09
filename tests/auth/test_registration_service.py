@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.inspection import inspect
@@ -13,6 +10,7 @@ from sqlalchemy.orm import Session
 import app.auth.service as service_module
 from app.auth.models import USER_ROLE, User
 from app.auth.service import RegistrationError, RegistrationReason, register_user
+from app.core.security import verify_password
 
 
 def test_register_user_trims_username_hashes_password_and_commits(
@@ -36,11 +34,8 @@ def test_register_user_trims_username_hashes_password_and_commits(
     assert saved.username == "new-user"
     assert saved.role == USER_ROLE
     assert saved.password_hash != password
-    assert _verify_password(password=password, encoded_hash=saved.password_hash)
-    assert not _verify_password(
-        password=password.strip(),
-        encoded_hash=saved.password_hash,
-    )
+    assert verify_password(password, saved.password_hash)
+    assert not verify_password(password.strip(), saved.password_hash)
 
 
 @pytest.mark.parametrize(
@@ -175,17 +170,3 @@ def test_register_user_rolls_back_commit_failure(
 
     assert not db.in_transaction()
     assert db.scalar(select(func.count(User.id))) == 0
-
-
-def _verify_password(*, password: str, encoded_hash: str) -> bool:
-    algorithm, iterations, salt_hex, derived_key_hex = encoded_hash.split("$")
-    assert algorithm == "pbkdf2_sha256"
-
-    candidate = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        bytes.fromhex(salt_hex),
-        int(iterations),
-        dklen=32,
-    )
-    return hmac.compare_digest(candidate, bytes.fromhex(derived_key_hex))
