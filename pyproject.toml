@@ -18,6 +18,7 @@ dev = [
     "pytest",
     "pyright",
     "ruff",
+    "httpx2>=2.9.1",
 ]
 
 [tool.pytest.ini_options]

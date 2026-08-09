@@ -5,4 +5,3 @@ jinja2
 sqlalchemy
 openai
 python-multipart
-pytest
