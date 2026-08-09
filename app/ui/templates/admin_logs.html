@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <title>관리자 운영 기록</title>
+  </head>
+  <body>
+    <main>
+      <h1>관리자 운영 기록</h1>
+      <table>
+        <thead>
+          <tr>
+            <th>user_id</th>
+            <th>username</th>
+            <th>chat_exchange_id</th>
+            <th>created_at</th>
+            <th>request_id</th>
+            <th>user_agent</th>
+            <th>response_time_ms</th>
+            <th>status</th>
+            <th>error_code</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ item.user_id }}</td>
+            <td>{{ item.username or "" }}</td>
+            <td>{{ item.chat_exchange_id }}</td>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.request_id }}</td>
+            <td>{{ item.user_agent or "" }}</td>
+            <td>{{ item.response_time_ms }}</td>
+            <td>{{ item.status }}</td>
+            <td>{{ item.error_code or "" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </main>
+  </body>
+</html>
