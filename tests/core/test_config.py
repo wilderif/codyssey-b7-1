@@ -88,11 +88,20 @@ def test_admin_initial_password_is_masked_in_repr_log_console_and_validation_err
     assert secret not in str(error.value)
 
 
-def test_production_rejects_public_session_secret_placeholder() -> None:
+@pytest.mark.parametrize(
+    "session_secret",
+    [
+        "change-me-for-local-development",
+        " change-me-for-local-development",
+        "change-me-for-local-development ",
+        " change-me-for-local-development ",
+    ],
+)
+def test_production_rejects_public_session_secret_placeholder(
+    session_secret: str,
+) -> None:
     with pytest.raises(ValidationError, match="SESSION_SECRET"):
-        Settings.model_validate(
-            _production_settings_values("change-me-for-local-development")
-        )
+        Settings.model_validate(_production_settings_values(session_secret))
 
 
 def test_production_rejects_missing_session_secret() -> None:

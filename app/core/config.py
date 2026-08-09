@@ -97,14 +97,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Production 환경에 필요한 설정이 없습니다: " + ", ".join(missing)
             )
-        if (
-            self.session_secret is not None
-            and self.session_secret.get_secret_value()
-            == PUBLIC_SESSION_SECRET_PLACEHOLDER
-        ):
-            raise ValueError(
-                "Production 환경에서는 공개된 SESSION_SECRET placeholder를 사용할 수 없습니다."
-            )
+        if self.session_secret is not None:
+            session_secret = self.session_secret.get_secret_value().strip()
+            if session_secret == PUBLIC_SESSION_SECRET_PLACEHOLDER:
+                raise ValueError(
+                    "Production 환경에서는 공개된 SESSION_SECRET placeholder를 사용할 수 없습니다."
+                )
         return self
 
 
