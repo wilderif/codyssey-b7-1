@@ -8,6 +8,7 @@ import sys
 from collections.abc import Generator
 from types import ModuleType
 from typing import Annotated
+from uuid import UUID
 
 import pytest
 from fastapi import Depends, FastAPI, Request
@@ -17,6 +18,7 @@ from app.auth.dependencies import get_current_user_id
 from app.core import config as config_module
 from app.core.config import Settings
 from app.core.database import Base
+from app.core.request_id import REQUEST_ID_HEADER
 
 
 def _settings(
@@ -143,6 +145,24 @@ def test_create_app_sets_configured_logging_level(main_module: ModuleType) -> No
     main_module.create_app(_settings(log_level="WARNING"))
 
     assert logging.getLogger().level == logging.WARNING
+
+
+def test_unhandled_api_error_preserves_request_id_on_500_response(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    @application.get("/api/_test/unhandled-error")
+    def raise_unhandled_error() -> None:
+        raise RuntimeError("unexpected failure")
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/api/_test/unhandled-error")
+
+    assert response.status_code == 500
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
 def _add_session_test_routes(application: FastAPI) -> None:
