@@ -30,3 +30,10 @@ testpaths = ["tests"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.12"
+strict = [
+    "app/chat/context.py",
+    "app/chat/openai_client.py",
+    "app/chat/service.py",
+    "tests/chat/test_context.py",
+    "tests/chat/test_openai_client.py",
+]
