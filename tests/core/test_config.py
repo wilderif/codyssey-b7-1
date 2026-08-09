@@ -86,3 +86,95 @@ def test_admin_initial_password_is_masked_in_repr_log_console_and_validation_err
         Settings()
 
     assert secret not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "session_secret",
+    [
+        "change-me-for-local-development",
+        " change-me-for-local-development",
+        "change-me-for-local-development ",
+        " change-me-for-local-development ",
+    ],
+)
+def test_production_rejects_public_session_secret_placeholder(
+    session_secret: str,
+) -> None:
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings.model_validate(_production_settings_values(session_secret))
+
+
+def test_production_rejects_missing_session_secret() -> None:
+    values = _production_settings_values("valid-session-secret")
+    del values["SESSION_SECRET"]
+
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings.model_validate(values)
+
+
+@pytest.mark.parametrize("session_secret", [None, "", "   "])
+def test_production_rejects_blank_session_secret(
+    session_secret: str | None,
+) -> None:
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings.model_validate(_production_settings_values(session_secret))
+
+
+def test_production_accepts_configured_session_secret() -> None:
+    configured = Settings.model_validate(
+        _production_settings_values("private-session-secret-value")
+    )
+
+    assert configured.app_env == "production"
+    assert configured.session_secret is not None
+    assert (
+        configured.session_secret.get_secret_value() == "private-session-secret-value"
+    )
+
+
+@pytest.mark.parametrize(
+    "session_secret",
+    [None, "", "   ", "change-me-for-local-development"],
+)
+def test_local_allows_session_secret_values_rejected_only_in_production(
+    session_secret: str | None,
+) -> None:
+    configured = Settings.model_validate(
+        {"APP_ENV": "local", "SESSION_SECRET": session_secret}
+    )
+
+    assert configured.app_env == "local"
+
+
+def test_session_secret_is_masked_in_repr_log_and_production_validation_error(
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    secret = "private-session-secret-value-must-not-appear"
+    logger = logging.getLogger("tests.core.config")
+    configured = Settings.model_validate({"APP_ENV": "local", "SESSION_SECRET": secret})
+
+    caplog.set_level(logging.INFO, logger=logger.name)
+    logger.info("settings=%r", configured)
+    print(configured)
+
+    assert secret not in repr(configured)
+    assert secret not in caplog.text
+    assert secret not in capsys.readouterr().out
+
+    values = _production_settings_values(secret)
+    values["OPENAI_API_KEY"] = None
+
+    with pytest.raises(ValidationError) as error:
+        Settings.model_validate(values)
+
+    assert secret not in str(error.value)
+
+
+def _production_settings_values(session_secret: str | None) -> dict[str, object]:
+    return {
+        "APP_ENV": "production",
+        "SESSION_SECRET": session_secret,
+        "OPENAI_API_KEY": "test-openai-api-key",
+        "OPENAI_MODEL": "test-openai-model",
+    }
