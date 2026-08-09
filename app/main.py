@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.admin.router import router as admin_router
 from app.auth.models import User
 from app.chat.errors import AppError
 from app.chat.models import ChatExchange
@@ -53,6 +54,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
     application.add_middleware(RequestIdMiddleware)
 
+    application.include_router(admin_router)
     application.include_router(chat_router)
     application.add_exception_handler(
         RequestValidationError,
