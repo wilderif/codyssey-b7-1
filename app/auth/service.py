@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.models import User
 from app.auth.repository import create_user, get_user_by_username
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 
 MIN_USERNAME_LENGTH = 3
 MAX_USERNAME_LENGTH = 30
@@ -31,6 +31,20 @@ class RegistrationError(Exception):
     def __init__(self, reason: RegistrationReason) -> None:
         self.reason = reason
         super().__init__(reason.value)
+
+
+def authenticate_user(
+    *,
+    db: Session,
+    username: str,
+    password: str,
+) -> User | None:
+    """Username과 password가 일치하는 User를 반환한다."""
+
+    user = get_user_by_username(db=db, username=username.strip())
+    if user is None or not verify_password(password, user.password_hash):
+        return None
+    return user
 
 
 def register_user(*, db: Session, username: str, password: str) -> User:
