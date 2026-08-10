@@ -1,7 +1,8 @@
 # DB schema 계약
 
-> 🗄️ 이 페이지가 SQLite table, 저장 실패 정책, 평가자 DB 확인 방법의 단일 기준입니다.
-> 현재는 schema 계약이며 구현 결과가 아닙니다.
+이 문서는 현재 repository가 따르는 persistence schema와 DB 동작 계약을 정의합니다. 구현 변경으로
+계약이 달라지는 경우 code와 이 문서를 같은 변경에서 함께 갱신합니다. 이 문서는 구현 완료 상태를
+의미하지 않습니다.
 
 ## 1. Model 원칙
 
@@ -25,8 +26,8 @@
 | `role` | String | Not Null. 사용자 역할 저장 |
 | `created_at` | DateTime | Not Null, UTC |
 
-일반 회원가입 계정은 일반 사용자 역할로 저장합니다. 초기 관리자 계정의 username은 `admin` 하나이며
-관리자 역할로 저장합니다.
+`role`은 일반 사용자와 관리자를 구분합니다. 초기 관리자 생성 규칙은
+[Architecture](../ARCHITECTURE.md)의 Auth 계약을 따릅니다.
 
 ### `chat_exchanges`
 
@@ -122,7 +123,6 @@ ChatExchange record도 유지하고 `username: str | None`을 허용합니다. `
 
 ### 예상하지 못한 내부 오류
 
-- API는 `internal_error`를 사용합니다.
 - 질문 수신 후 발생했고 실패 record를 안전하게 저장할 수 있으면
   `ChatExchange.error_code=internal_error`를 저장할 수 있습니다.
 - 검증·인증·조회·권한 단계의 `validation_error`, `not_authenticated`,
@@ -130,24 +130,17 @@ ChatExchange record도 유지하고 `username: str | None`을 허용합니다. `
 
 ### DB 저장 자체 실패
 
-해당 record는 저장할 수 없습니다. server log에 `db_save_failed` event를 남기고 API는 다음
-응답을 반환합니다.
+해당 ChatExchange를 저장할 수 없으므로 transaction을 rollback하고 같은 DB에 실패 record를 추가로
+저장하지 않습니다. `db_save_error`는 `ChatExchange.error_code`에 저장하지 않습니다. 외부 HTTP status와
+error response는 [API 계약](../api/API.md)을 따릅니다.
 
-```json
-{"code":"db_save_error","detail":"서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
-```
+## 6. SQLite 연결 동작
 
-`db_save_error`는 DB 저장 자체가 실패했으므로 `ChatExchange.error_code`에 저장하지 않습니다.
-내부 SQL 오류, 전체 stack, 비밀정보는 응답에 포함하지 않으며 `error_message`는 화면과 API에
-노출하지 않습니다.
-
-## 6. SQLite 위치와 영속성
-
-- local: `DATABASE_URL=sqlite:///./data/chatbot.db`
-- 배포: `DATABASE_URL=sqlite:////data/chatbot.db`
-- Railway·Render 어느 platform을 선택하더라도 SQLite persistent Volume 또는 Disk mount path는
-  `/data`로 설정합니다.
-- 최종 평가 배포에서는 service 재시작 후에도 SQLite data가 유지되어야 합니다.
+- SQLite engine에는 `check_same_thread=False`를 적용합니다.
+- connection마다 foreign key enforcement를 활성화합니다.
+- SQLAlchemy `Base`, engine과 Session factory는 `app/core/database.py`에서 생성합니다.
+- 환경별 SQLite 연결 URL, deployment Volume과 restart persistence configuration은
+  [실행·배포 계약](../DEPLOYMENT.md)을 따릅니다.
 
 ## 7. 평가자 확인 방법
 
@@ -161,7 +154,7 @@ sqlite3 data/chatbot.db < scripts/check_logs.sql
 ```
 
 script는 사용자 역할, 최근 ChatExchange, 실패 ChatExchange의 `answer_is_null` 불변식,
-사용자별 ChatExchange 수, 운영 metadata, Admin 9-field projection을 순서대로 조회합니다.
+사용자별 ChatExchange 수, 운영 metadata, Admin projection을 순서대로 조회합니다.
 Admin projection은 `chat_exchanges LEFT JOIN users`를 기준으로 최신순이며 다음 field만
 출력합니다.
 
