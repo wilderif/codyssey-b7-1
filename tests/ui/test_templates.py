@@ -12,6 +12,7 @@ from app.chat.service import ChatExchangeHistoryItem
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE_DIRECTORY = PROJECT_ROOT / "app" / "ui" / "templates"
 STYLES_PATH = PROJECT_ROOT / "app" / "ui" / "static" / "styles.css"
+CHAT_SCRIPT_PATH = PROJECT_ROOT / "app" / "ui" / "static" / "chat.js"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIRECTORY))
 
 
@@ -243,6 +244,81 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
         attributes.get("aria-live") == "polite" for _, attributes in collector.tags
     )
     assert "답변 생성 중…" in html
+
+
+def test_chat_template_loads_only_its_interaction_script_with_defer() -> None:
+    html = _render_template("chat.html", chat_exchanges=[], is_admin=False)
+    collector = _collect_tags(html)
+    script = _find_tag(collector, "script", "src", "/static/chat.js")
+
+    assert "defer" in script
+    assert html.count('src="/static/chat.js"') == 1
+
+    for template_name, context in (
+        ("base.html", {}),
+        ("signup.html", {"error": None, "username": ""}),
+        ("login.html", {"error": None, "username": ""}),
+    ):
+        other_html = _render_template(template_name, **context)
+        assert 'src="/static/chat.js"' not in other_html
+
+
+def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> None:
+    script = CHAT_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    for element_id in (
+        "chat-form",
+        "chat-message",
+        "chat-submit",
+        "chat-history",
+        "chat-empty-state",
+        "chat-form-error",
+        "chat-pending-template",
+    ):
+        assert element_id in script
+    for data_hook in (
+        "data-chat-question",
+        "data-chat-response",
+        "data-chat-time",
+    ):
+        assert data_hook in script
+
+    for request_contract in (
+        'fetch("/api/chat"',
+        'method: "POST"',
+        'Accept: "application/json"',
+        '"Content-Type": "application/json"',
+        'credentials: "same-origin"',
+        "JSON.stringify({ message: submittedQuestion })",
+    ):
+        assert request_contract in script
+
+    for known_error_code in (
+        "validation_error",
+        "not_authenticated",
+        "db_save_error",
+        "internal_error",
+        "openai_api_error",
+        "openai_timeout",
+    ):
+        assert known_error_code in script
+    for user_message in (
+        "질문을 입력해주세요.",
+        "질문은 1000자 이하로 입력해주세요.",
+        "요청을 처리하지 못했습니다.",
+    ):
+        assert user_message in script
+
+    assert ".textContent" in script
+    assert "innerHTML" not in script
+    assert ".cookie" not in script
+    assert "localStorage" not in script
+    assert "sessionStorage" not in script
+
+    success_renderer = script[
+        script.index("function renderSuccess") : script.index("function renderFailure")
+    ]
+    assert 'removeAttribute("aria-live")' not in success_renderer
 
 
 def test_chat_template_renders_history_oldest_first_with_status_and_utc_time() -> None:
