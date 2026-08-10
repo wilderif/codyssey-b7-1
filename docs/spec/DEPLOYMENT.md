@@ -27,7 +27,7 @@ ADMIN_INITIAL_PASSWORD=
 | `DATABASE_URL` | `sqlite:///./data/chatbot.db` | Local SQLite 연결 URL |
 | `APP_ENV` | `local`; `production` 허용 | 실행 environment를 구분. `production`에서는 production 보안·설정 validation을 적용 |
 | `LOG_LEVEL` | `INFO` | Application log level |
-| `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 초기 version은 `admin`만 허용하며 다른 값은 유효하지 않음 |
+| `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 기본값은 `admin`이며 앞뒤 공백 제거 후 3~30자를 허용 |
 | `ADMIN_INITIAL_PASSWORD` | 기본값 없음 | 관리자 역할 계정이 없을 때 초기 관리자 bootstrap에 사용하는 secret. 실제 값을 repository에 기록하지 않음 |
 
 `ADMIN_INITIAL_PASSWORD`는 관리자 역할 계정이 하나도 없을 때 Auth startup use case가 사용합니다.

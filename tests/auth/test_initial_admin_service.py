@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
@@ -20,6 +21,14 @@ from app.core.config import Settings
 from app.core.security import verify_password
 
 
+@pytest.fixture(autouse=True)
+def use_empty_env_file_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+
 def test_ensure_initial_admin_creates_hashed_admin_account(
     db: Session,
 ) -> None:
@@ -33,6 +42,22 @@ def test_ensure_initial_admin_creates_hashed_admin_account(
     assert admin is not None
     assert admin.role == ADMIN_ROLE
     assert admin.password_hash != password
+    assert verify_password(password, admin.password_hash)
+
+
+def test_ensure_initial_admin_creates_account_with_configured_username(
+    db: Session,
+) -> None:
+    username = "ops-admin"
+    password = "initial-admin-password"
+    app_settings = _admin_settings(username=username, password=password)
+
+    ensure_initial_admin(db=db, app_settings=app_settings)
+
+    assert not db.in_transaction()
+    admin = get_user_by_username(db=db, username=username)
+    assert admin is not None
+    assert admin.role == ADMIN_ROLE
     assert verify_password(password, admin.password_hash)
 
 
@@ -239,8 +264,10 @@ def test_ensure_initial_admin_rolls_back_commit_error(
     _assert_safe_failure_log(caplog, reason=AdminBootstrapReason.DB_ERROR)
 
 
-def _admin_settings(*, password: str | None = None) -> Settings:
-    values: dict[str, object] = {"ADMIN_USERNAME": "admin"}
+def _admin_settings(
+    *, username: str = "admin", password: str | None = None
+) -> Settings:
+    values: dict[str, object] = {"ADMIN_USERNAME": username}
     if password is not None:
         values["ADMIN_INITIAL_PASSWORD"] = password
     return Settings.model_validate(values)
