@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -118,7 +119,8 @@ def test_admin_logs_renders_safe_metadata_for_admin(
     for value in (
         "12",
         "34",
-        "2026-08-09 10:30:00+00:00",
+        'datetime="2026-08-09T10:30:00+00:00"',
+        "2026-08-09 10:30:00 UTC",
         "request-34",
         "56",
         "failed",
@@ -135,6 +137,55 @@ def test_admin_logs_renders_safe_metadata_for_admin(
         "password-hash-secret",
     ):
         assert sensitive_value not in response.text
+
+
+def test_admin_logs_renders_semantic_table_contract(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.admin import router as router_module
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        lambda *, db: [_metadata_item()],
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
+    assert 'name="viewport" content="width=device-width, initial-scale=1"' in (
+        response.text
+    )
+    assert 'class="admin-table-container"' in response.text
+    assert 'role="region"' in response.text
+    assert 'aria-labelledby="admin-table-caption"' in response.text
+    assert 'tabindex="0"' in response.text
+    assert '<caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>' in (
+        response.text
+    )
+    for field_name in (
+        "user_id",
+        "username",
+        "chat_exchange_id",
+        "created_at",
+        "request_id",
+        "user_agent",
+        "response_time_ms",
+        "status",
+        "error_code",
+    ):
+        assert f'<th scope="col">{field_name}</th>' in response.text
+    assert response.text.count('scope="col"') == 9
 
 
 def test_admin_logs_returns_safe_html_error_for_admin_read_error(
@@ -215,6 +266,67 @@ def test_admin_logs_renders_orphan_record_with_empty_username(
 
     assert response.status_code == 200
     assert "request-34" in response.text
+
+
+def test_admin_logs_renders_nullable_metadata_with_placeholder(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.admin import router as router_module
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    item = replace(
+        _metadata_item(username=None, user_agent=None),
+        status="success",
+        error_code=None,
+    )
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        lambda *, db: [item],
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
+    assert response.text.count("<td>-</td>") == 3
+
+
+def test_admin_logs_renders_empty_state_without_table(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.admin import router as router_module
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        lambda *, db: [],
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
+    assert "표시할 운영 기록이 없습니다." in response.text
+    assert 'class="admin-empty-state"' in response.text
+    assert "<table" not in response.text
 
 
 def test_admin_logs_passes_only_metadata_to_template_context(
