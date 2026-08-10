@@ -158,9 +158,11 @@ from app.auth.service import (
     register_user,
 )
 from app.auth.dependencies import (
+    AuthenticatedUser,
     clear_session_user_id,
     get_current_user_id,
     get_session_user_id,
+    require_authenticated_user,
     require_admin,
     set_session_user_id,
 )
@@ -174,7 +176,18 @@ def set_session_user_id(request: Request, *, user_id: int) -> None: ...
 def get_session_user_id(request: Request) -> int | None: ...
 def clear_session_user_id(request: Request) -> None: ...
 def get_current_user_id(request: Request) -> int: ...
+def require_authenticated_user(...) -> AuthenticatedUser: ...
 def require_admin(...): ...
+```
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class AuthenticatedUser:
+    user_id: int
+    is_admin: bool
 ```
 
 - `User`는 역할을 저장하는 `role` field를 포함합니다. 일반 회원가입 계정은 일반 사용자,
@@ -189,8 +202,19 @@ def require_admin(...): ...
 - Auth는 session에 사용자 ID를 저장·조회·삭제하는 public helper의 mechanics를 소유합니다.
   UI Router는 session key를 직접 읽거나 쓰지 않고, login 인증 성공과 logout 요청에서 이 helper를
   호출합니다.
-- `get_current_user_id()`와 `require_admin`은 Router가 인증·권한 결과를 얻는 public dependency입니다.
-  외부 HTTP 결과는 [API 계약](api/API.md)을 따르며 UI는 관리자 여부를 최종 판별하지 않습니다.
+- `get_current_user_id()`는 JSON API가 login 사용자 ID를 얻는 public dependency입니다.
+- `require_authenticated_user()`는 HTML 보호 화면이 사용하는 Auth-owned public dependency입니다.
+  Session의 사용자 ID를 실제 `users` record와 대조하고, `user_id`와 `is_admin`만 포함한
+  `AuthenticatedUser`를 반환합니다. Session 값이 없거나 유효하지 않거나 대응 User가 없으면 stale
+  session을 제거하고 `303 /login`으로 이동시킵니다.
+- `require_admin()`은 관리자 HTML 화면이 사용하는 public dependency이며 User 조회와 역할 판별을
+  Auth module 안에서 수행합니다.
+- `AuthenticatedUser`는 UI용 최소 read model이며 ORM `User`, username, `role` 원문이나
+  `password_hash`를 UI에 전달하지 않습니다. UI Router는 Auth Repository나 User model을 직접
+  import하지 않고 `is_admin`으로 관리자 navigation rendering 여부만 결정합니다.
+- `require_authenticated_user()`는 현재 UI Router 구현 전에 Auth module에 추가되어야 하는 integration
+  prerequisite입니다. 이 interface가 추가될 때 Auth dependency test와 이 문서를 함께 갱신합니다.
+- 외부 HTTP 결과는 [API 계약](api/API.md)을 따르며 UI는 인증과 관리자 권한을 최종 판별하지 않습니다.
 
 ### Chat → Auth·UI
 
@@ -238,10 +262,14 @@ from app.auth.dependencies import require_admin
 - UI Router는 Auth·Chat Service와 Auth session helper를 사용해 사용자 화면 흐름을 구성하고,
   Chat Router는 Auth와 DB dependency를 Chat JSON API에 연결합니다. 경로와 HTTP 결과의 상세
   계약은 [API 계약](api/API.md)을 따릅니다.
+- UI Router는 `GET /`, 회원가입·Login·Logout form route와 `GET /chat`을 소유합니다. Admin Router가
+  이미 소유한 `GET /admin/logs`를 중복 등록하지 않습니다.
 - Admin Router는 권한 dependency와 Admin Service를 연결해 read-only 운영 metadata를 UI template에
   전달합니다.
-- `app/main.py`는 UI·Chat·Admin router, SessionMiddleware, logging, health, `init_db()`를 연결하고,
-  DB 초기화 후 요청을 받기 전에 `create_app()`이 선택한 실행 설정을 전달하여
+- `app/main.py`는 `app/ui/router.py`의 router를 한 번 등록하고 `app/ui/static`을 `/static`에 mount합니다.
+  UI asset은 인증 없이 조회할 수 있지만 template과 JavaScript 외의 business API를 제공하지 않습니다.
+- `app/main.py`는 UI·Chat·Admin router, static mount, SessionMiddleware, logging, health,
+  `init_db()`를 연결하고, DB 초기화 후 요청을 받기 전에 `create_app()`이 선택한 실행 설정을 전달하여
   `ensure_initial_admin()`을 호출합니다.
 - server log는 요청 수신, AI 호출·응답, DB 저장 성공·실패를 application logging으로 남깁니다.
   `/admin/logs`는 server runtime log file을 표시하는 화면이 아닙니다.
