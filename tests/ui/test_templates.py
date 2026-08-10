@@ -477,3 +477,36 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
         width_rule in responsive_styles
         for width_rule in ("width: 100%", "max-width: 100%", "min-width: 0")
     )
+
+
+def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
+    styles = STYLES_PATH.read_text(encoding="utf-8")
+
+    for expected_selector in (
+        ".admin-page",
+        ".admin-main",
+        ".admin-header",
+        ".admin-header__description",
+        ".admin-table-container",
+        ".admin-table-container:focus-visible",
+        ".admin-table",
+        ".admin-table caption",
+        ".admin-table th",
+        ".admin-table td",
+        ".admin-empty-state",
+    ):
+        assert expected_selector in styles
+
+    for expected_rule in (
+        "overflow-x: auto",
+        "min-width: 72rem",
+        "border-collapse: collapse",
+        "overflow-wrap: anywhere",
+        "vertical-align: top",
+        "scrollbar-gutter: stable",
+    ):
+        assert expected_rule in styles
+
+    responsive_styles = styles[styles.index("@media (max-width:") :]
+    assert ".admin-main" in responsive_styles
+    assert ".admin-table-container" in responsive_styles

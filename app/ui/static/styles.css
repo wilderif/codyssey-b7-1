@@ -432,6 +432,104 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.admin-page {
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.admin-main {
+  display: grid;
+  width: min(100%, 80rem);
+  min-width: 0;
+  margin: 0 auto;
+  align-content: start;
+  gap: var(--space-6);
+  padding: clamp(var(--space-4), 5vw, var(--space-8));
+}
+
+.admin-header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  line-height: 1.2;
+}
+
+.admin-header__description {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.admin-table-container {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.admin-table-container:focus-visible {
+  outline-offset: var(--space-1);
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 72rem;
+  border-collapse: collapse;
+  color: var(--color-text);
+  font-size: 0.875rem;
+}
+
+.admin-table caption {
+  caption-side: top;
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  overflow-wrap: anywhere;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  background: var(--color-background);
+  font-weight: 700;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-table time {
+  white-space: nowrap;
+}
+
+.admin-empty-state {
+  margin: 0;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-large);
+  padding: clamp(var(--space-6), 8vw, var(--space-8));
+  background: var(--color-surface);
+  color: var(--color-muted);
+  text-align: center;
+}
+
 @media (max-width: 30rem) {
   .page-shell {
     align-items: start;
@@ -479,5 +577,15 @@ button:disabled {
   .chat-form__actions,
   .chat-form__actions button {
     width: 100%;
+  }
+
+  .admin-main {
+    gap: var(--space-4);
+    padding: var(--space-4);
+  }
+
+  .admin-table-container {
+    border-radius: var(--radius-small);
+    box-shadow: none;
   }
 }
