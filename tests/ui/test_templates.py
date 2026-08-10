@@ -1,10 +1,13 @@
 """공통 UI template과 static style 계약을 검증한다."""
 
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 from fastapi.templating import Jinja2Templates
+
+from app.chat.service import ChatExchangeHistoryItem
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE_DIRECTORY = PROJECT_ROOT / "app" / "ui" / "templates"
@@ -47,6 +50,23 @@ def _find_tag(
         attributes
         for tag, attributes in collector.tags
         if tag == tag_name and attributes.get(attribute_name) == attribute_value
+    )
+
+
+def _history_item(
+    *,
+    chat_exchange_id: int,
+    question: str,
+    answer: str | None,
+    status: str,
+    created_at: datetime,
+) -> ChatExchangeHistoryItem:
+    return ChatExchangeHistoryItem(
+        chat_exchange_id=chat_exchange_id,
+        question=question,
+        answer=answer,
+        status=status,
+        created_at=created_at,
     )
 
 
@@ -180,3 +200,204 @@ def test_auth_template_safely_renders_error_and_username_without_password(
     assert password not in html
     assert "&lt;script&gt;" in html
     assert "&lt;img src=x onerror=&#34;alert(1)&#34;&gt;" in html
+
+
+def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
+    html = _render_template("chat.html", chat_exchanges=[], is_admin=False)
+    collector = _collect_tags(html)
+    main = _find_tag(collector, "main", "id", "main-content")
+    history = _find_tag(collector, "section", "id", "chat-history")
+    empty_state = _find_tag(collector, "p", "id", "chat-empty-state")
+    form = _find_tag(collector, "form", "id", "chat-form")
+    label = _find_tag(collector, "label", "for", "chat-message")
+    textarea = _find_tag(collector, "textarea", "id", "chat-message")
+    error = _find_tag(collector, "p", "id", "chat-form-error")
+    submit = _find_tag(collector, "button", "id", "chat-submit")
+    pending_template = _find_tag(collector, "template", "id", "chat-pending-template")
+    logout_form = _find_tag(collector, "form", "action", "/logout")
+
+    assert main is not None
+    assert history is not None
+    assert empty_state is not None
+    assert "아직 대화 기록이 없습니다." in html
+    assert "novalidate" in form
+    assert label is not None
+    assert textarea["maxlength"] == "1000"
+    assert textarea["aria-describedby"] == "chat-form-error"
+    assert "required" in textarea
+    assert error["role"] == "alert"
+    assert "hidden" in error
+    assert submit["type"] == "submit"
+    assert pending_template is not None
+    assert logout_form["method"] == "post"
+    assert 'href="/admin/logs"' not in html
+    assert html.count("<h1") == 1
+
+    for data_hook in (
+        "data-chat-question",
+        "data-chat-response",
+        "data-chat-time",
+    ):
+        assert any(data_hook in attributes for _, attributes in collector.tags)
+    assert any(
+        attributes.get("aria-live") == "polite" for _, attributes in collector.tags
+    )
+    assert "답변 생성 중…" in html
+
+
+def test_chat_template_renders_history_oldest_first_with_status_and_utc_time() -> None:
+    newest = _history_item(
+        chat_exchange_id=22,
+        question="최신 실패 질문",
+        answer=None,
+        status="failed",
+        created_at=datetime(2026, 8, 10, 15, 45, tzinfo=UTC),
+    )
+    oldest = _history_item(
+        chat_exchange_id=11,
+        question="가장 오래된 질문",
+        answer="가장 오래된 답변",
+        status="success",
+        created_at=datetime(2026, 8, 9, 8, 30, 12, tzinfo=UTC),
+    )
+
+    html = _render_template(
+        "chat.html",
+        chat_exchanges=[newest, oldest],
+        is_admin=False,
+    )
+    collector = _collect_tags(html)
+    oldest_exchange = _find_tag(
+        collector,
+        "article",
+        "data-chat-exchange-id",
+        "11",
+    )
+    newest_exchange = _find_tag(
+        collector,
+        "article",
+        "data-chat-exchange-id",
+        "22",
+    )
+    rendered_datetimes = [
+        attributes["datetime"]
+        for tag, attributes in collector.tags
+        if tag == "time" and attributes.get("datetime") is not None
+    ]
+
+    assert html.index('data-chat-exchange-id="11"') < html.index(
+        'data-chat-exchange-id="22"'
+    )
+    assert html.index("가장 오래된 질문") < html.index("최신 실패 질문")
+    assert "chat-exchange--failed" not in (oldest_exchange["class"] or "")
+    assert "chat-exchange--failed" in (newest_exchange["class"] or "")
+    assert "가장 오래된 답변" in html
+    assert "답변을 생성하지 못했습니다." in html
+    assert "성공" not in html
+    assert oldest.created_at.isoformat() in rendered_datetimes
+    assert newest.created_at.isoformat() in rendered_datetimes
+    assert html.count("UTC") >= 2
+
+
+@pytest.mark.parametrize(
+    ("is_admin", "admin_link_expected"),
+    [(False, False), (True, True)],
+)
+def test_chat_template_only_renders_admin_navigation_for_admin(
+    is_admin: bool,
+    admin_link_expected: bool,
+) -> None:
+    html = _render_template("chat.html", chat_exchanges=[], is_admin=is_admin)
+
+    assert ('href="/admin/logs"' in html) is admin_link_expected
+    assert ("관리자 운영 기록" in html) is admin_link_expected
+
+
+def test_chat_template_escapes_plain_text_and_excludes_internal_metadata() -> None:
+    question = '<script>alert("question")</script>\n두 번째 줄\n' + ("긴질문" * 120)
+    answer = '<img src=x onerror="alert(1)">\n두 번째 답변'
+    internal_sentinels = {
+        "error_message": "internal-error-must-not-be-rendered",
+        "request_id": "request-id-must-not-be-rendered",
+        "user_agent": "user-agent-must-not-be-rendered",
+        "password": "password-must-not-be-rendered",
+    }
+    exchange = {
+        "chat_exchange_id": 31,
+        "question": question,
+        "answer": answer,
+        "status": "success",
+        "created_at": datetime(2026, 8, 10, 18, tzinfo=UTC),
+        **internal_sentinels,
+    }
+
+    html = _render_template(
+        "chat.html",
+        chat_exchanges=[exchange],
+        is_admin=False,
+        **internal_sentinels,
+    )
+    collector = _collect_tags(html)
+
+    assert question not in html
+    assert answer not in html
+    assert "&lt;script&gt;alert(&#34;question&#34;)&lt;/script&gt;" in html
+    assert "&lt;img src=x onerror=&#34;alert(1)&#34;&gt;" in html
+    assert "두 번째 줄\n" in html
+    assert "긴질문" * 120 in html
+    assert "두 번째 답변" in html
+    for sentinel in internal_sentinels.values():
+        assert sentinel not in html
+    assert any("data-chat-question" in attributes for _, attributes in collector.tags)
+    assert any("data-chat-response" in attributes for _, attributes in collector.tags)
+
+
+def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> None:
+    styles = STYLES_PATH.read_text(encoding="utf-8")
+
+    for expected_selector in (
+        ".chat-page",
+        ".chat-header__inner",
+        ".chat-nav",
+        ".chat-main",
+        ".chat-history",
+        ".chat-exchange",
+        ".chat-message--user",
+        ".chat-message--assistant",
+        ".chat-message__content",
+        ".chat-composer",
+        ".chat-form",
+    ):
+        assert expected_selector in styles
+    for expected_rule in (
+        "white-space: pre-wrap",
+        "overflow-wrap: anywhere",
+        "min-width: 0",
+    ):
+        assert expected_rule in styles
+    assert any(
+        user_alignment in styles
+        for user_alignment in (
+            "align-self: end",
+            "justify-self: end",
+            "margin-left: auto",
+        )
+    )
+    assert any(
+        assistant_alignment in styles
+        for assistant_alignment in (
+            "align-self: start",
+            "justify-self: start",
+            "margin-right: auto",
+        )
+    )
+
+    responsive_styles = styles[styles.index("@media (max-width:") :]
+    assert any(
+        selector in responsive_styles
+        for selector in (".chat-header__inner", ".chat-nav", ".chat-form__actions")
+    )
+    assert any(
+        width_rule in responsive_styles
+        for width_rule in ("width: 100%", "max-width: 100%", "min-width: 0")
+    )
