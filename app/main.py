@@ -12,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.admin.router import router as admin_router
 from app.auth.models import User
+from app.auth.service import ensure_initial_admin
 from app.chat.errors import AppError
 from app.chat.models import ChatExchange
 from app.chat.router import (
@@ -22,7 +23,7 @@ from app.chat.router import (
 )
 from app.chat.router import router as chat_router
 from app.core.config import Settings, settings
-from app.core.database import init_db
+from app.core.database import SessionLocal, init_db
 from app.core.request_id import RequestIdMiddleware
 
 SESSION_MAX_AGE_SECONDS = 28_800
@@ -31,9 +32,11 @@ _REGISTERED_MODELS = (User, ChatExchange)
 
 @asynccontextmanager
 async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
-    """요청을 받기 전에 application DB table을 초기화한다."""
+    """요청을 받기 전에 DB table과 초기 admin 계정을 준비한다."""
 
     init_db()
+    with SessionLocal() as db:
+        ensure_initial_admin(db=db)
     yield
 
 

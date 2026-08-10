@@ -6,6 +6,7 @@ import importlib
 import logging
 import sys
 from collections.abc import Generator
+from contextlib import contextmanager, nullcontext
 from types import ModuleType
 from typing import Annotated
 from uuid import UUID
@@ -46,6 +47,8 @@ def main_module(monkeypatch: pytest.MonkeyPatch) -> Generator[ModuleType, None, 
     monkeypatch.setattr(config_module, "settings", _settings())
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
+    monkeypatch.setattr(module, "SessionLocal", lambda: nullcontext(object()))
+    monkeypatch.setattr(module, "ensure_initial_admin", lambda **_kwargs: None)
     try:
         yield module
     finally:
@@ -76,11 +79,28 @@ def test_health_initializes_registered_models_before_serving_requests(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     initialized_tables: list[set[str]] = []
+    startup_events: list[str] = []
+    db_session = object()
 
     def record_init_db() -> None:
+        startup_events.append("init_db")
         initialized_tables.append(set(Base.metadata.tables))
 
+    @contextmanager
+    def session_scope() -> Generator[object, None, None]:
+        startup_events.append("session_opened")
+        try:
+            yield db_session
+        finally:
+            startup_events.append("session_closed")
+
+    def record_initial_admin(*, db: object) -> None:
+        assert db is db_session
+        startup_events.append("initial_admin_ensured")
+
     monkeypatch.setattr(main_module, "init_db", record_init_db)
+    monkeypatch.setattr(main_module, "SessionLocal", session_scope)
+    monkeypatch.setattr(main_module, "ensure_initial_admin", record_initial_admin)
     application = main_module.create_app(_settings())
 
     with TestClient(application) as client:
@@ -90,6 +110,54 @@ def test_health_initializes_registered_models_before_serving_requests(
     assert response.json() == {"status": "ok"}
     assert len(initialized_tables) == 1
     assert {"users", "chat_exchanges"} <= initialized_tables[0]
+    assert startup_events == [
+        "init_db",
+        "session_opened",
+        "initial_admin_ensured",
+        "session_closed",
+    ]
+
+
+def test_admin_bootstrap_failure_closes_session_and_stops_startup(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    startup_events: list[str] = []
+    db_session = object()
+
+    def record_init_db() -> None:
+        startup_events.append("init_db")
+
+    @contextmanager
+    def session_scope() -> Generator[object, None, None]:
+        startup_events.append("session_opened")
+        try:
+            yield db_session
+        finally:
+            startup_events.append("session_closed")
+
+    def fail_initial_admin(*, db: object) -> None:
+        assert db is db_session
+        startup_events.append("initial_admin_failed")
+        raise RuntimeError("initial admin bootstrap failed")
+
+    monkeypatch.setattr(main_module, "init_db", record_init_db)
+    monkeypatch.setattr(main_module, "SessionLocal", session_scope)
+    monkeypatch.setattr(main_module, "ensure_initial_admin", fail_initial_admin)
+    application = main_module.create_app(_settings())
+
+    with (
+        pytest.raises(RuntimeError, match="initial admin bootstrap failed"),
+        TestClient(application),
+    ):
+        pytest.fail("startup failure must prevent request handling")
+
+    assert startup_events == [
+        "init_db",
+        "session_opened",
+        "initial_admin_failed",
+        "session_closed",
+    ]
 
 
 @pytest.mark.parametrize(
