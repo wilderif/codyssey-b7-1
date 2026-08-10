@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -50,8 +51,6 @@ def _metadata_item(
     *,
     username: str | None = "admin-user",
     user_agent: str | None = "test-client/1.0",
-    status: str = "failed",
-    error_code: str | None = "openai_timeout",
 ) -> AdminChatOperationMetadataItem:
     return AdminChatOperationMetadataItem(
         user_id=12,
@@ -61,8 +60,8 @@ def _metadata_item(
         request_id="request-34",
         user_agent=user_agent,
         response_time_ms=56,
-        status=status,
-        error_code=error_code,
+        status="failed",
+        error_code="openai_timeout",
     )
 
 
@@ -130,6 +129,40 @@ def test_admin_logs_renders_safe_metadata_for_admin(
         "client&lt;&amp;&gt;",
     ):
         assert value in response.text
+    for sensitive_value in (
+        '<script>alert("username")</script>',
+        "question-secret",
+        "answer-secret",
+        "error-message-secret",
+        "password-hash-secret",
+    ):
+        assert sensitive_value not in response.text
+
+
+def test_admin_logs_renders_semantic_table_contract(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.admin import router as router_module
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        lambda *, db: [_metadata_item()],
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
     assert 'name="viewport" content="width=device-width, initial-scale=1"' in (
         response.text
     )
@@ -153,14 +186,6 @@ def test_admin_logs_renders_safe_metadata_for_admin(
     ):
         assert f'<th scope="col">{field_name}</th>' in response.text
     assert response.text.count('scope="col"') == 9
-    for sensitive_value in (
-        '<script>alert("username")</script>',
-        "question-secret",
-        "answer-secret",
-        "error-message-secret",
-        "password-hash-secret",
-    ):
-        assert sensitive_value not in response.text
 
 
 def test_admin_logs_returns_safe_html_error_for_admin_read_error(
@@ -216,7 +241,7 @@ def test_admin_logs_returns_safe_html_error_for_admin_read_error(
     assert "Traceback" not in caplog.text
 
 
-def test_admin_logs_renders_nullable_metadata_with_placeholder(
+def test_admin_logs_renders_orphan_record_with_empty_username(
     app: FastAPI,
     client: TestClient,
     db: Session,
@@ -234,20 +259,44 @@ def test_admin_logs_renders_nullable_metadata_with_placeholder(
     monkeypatch.setattr(
         router_module,
         "list_admin_chat_operation_metadata",
-        lambda *, db: [
-            _metadata_item(
-                username=None,
-                user_agent=None,
-                status="success",
-                error_code=None,
-            )
-        ],
+        lambda *, db: [_metadata_item(username=None, user_agent=None)],
     )
 
     response = client.get("/admin/logs")
 
     assert response.status_code == 200
     assert "request-34" in response.text
+
+
+def test_admin_logs_renders_nullable_metadata_with_placeholder(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.admin import router as router_module
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    item = replace(
+        _metadata_item(username=None, user_agent=None),
+        status="success",
+        error_code=None,
+    )
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        lambda *, db: [item],
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
     assert response.text.count("<td>-</td>") == 3
 
 
