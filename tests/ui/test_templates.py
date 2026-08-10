@@ -350,3 +350,54 @@ def test_chat_template_escapes_plain_text_and_excludes_internal_metadata() -> No
         assert sentinel not in html
     assert any("data-chat-question" in attributes for _, attributes in collector.tags)
     assert any("data-chat-response" in attributes for _, attributes in collector.tags)
+
+
+def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> None:
+    styles = STYLES_PATH.read_text(encoding="utf-8")
+
+    for expected_selector in (
+        ".chat-page",
+        ".chat-header__inner",
+        ".chat-nav",
+        ".chat-main",
+        ".chat-history",
+        ".chat-exchange",
+        ".chat-message--user",
+        ".chat-message--assistant",
+        ".chat-message__content",
+        ".chat-composer",
+        ".chat-form",
+    ):
+        assert expected_selector in styles
+    for expected_rule in (
+        "white-space: pre-wrap",
+        "overflow-wrap: anywhere",
+        "min-width: 0",
+    ):
+        assert expected_rule in styles
+    assert any(
+        user_alignment in styles
+        for user_alignment in (
+            "align-self: end",
+            "justify-self: end",
+            "margin-left: auto",
+        )
+    )
+    assert any(
+        assistant_alignment in styles
+        for assistant_alignment in (
+            "align-self: start",
+            "justify-self: start",
+            "margin-right: auto",
+        )
+    )
+
+    responsive_styles = styles[styles.index("@media (max-width:") :]
+    assert any(
+        selector in responsive_styles
+        for selector in (".chat-header__inner", ".chat-nav", ".chat-form__actions")
+    )
+    assert any(
+        width_rule in responsive_styles
+        for width_rule in ("width: 100%", "max-width: 100%", "min-width: 0")
+    )
