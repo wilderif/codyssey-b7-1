@@ -9,13 +9,15 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
+    AuthenticatedUser,
     clear_session_user_id,
     get_current_user_id,
     get_session_user_id,
     require_admin,
+    require_authenticated_user,
     set_session_user_id,
 )
-from app.auth.models import ADMIN_ROLE
+from app.auth.models import ADMIN_ROLE, USER_ROLE
 from app.auth.repository import create_user
 
 
@@ -87,6 +89,45 @@ def test_get_current_user_id_rejects_invalid_session(
 
     assert error.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert error.value.detail == "로그인이 필요합니다."
+
+
+@pytest.mark.parametrize(
+    ("role", "expected_is_admin"),
+    [(USER_ROLE, False), (ADMIN_ROLE, True)],
+)
+def test_require_authenticated_user_returns_minimal_user_data(
+    db: Session,
+    role: str,
+    expected_is_admin: bool,
+) -> None:
+    user = create_user(
+        db=db,
+        username=f"{role}-user",
+        password_hash="test-hash",
+        role=role,
+    )
+
+    result = require_authenticated_user(make_request({"user_id": user.id}), db)
+
+    assert result == AuthenticatedUser(
+        user_id=user.id,
+        is_admin=expected_is_admin,
+    )
+
+
+@pytest.mark.parametrize("user_id", [None, "1", True, 0, -1, 999])
+def test_require_authenticated_user_clears_stale_session_and_redirects(
+    db: Session,
+    user_id: object,
+) -> None:
+    request = make_request({"user_id": user_id, "stale": "value"})
+
+    with pytest.raises(HTTPException) as error:
+        require_authenticated_user(request, db)
+
+    assert request.session == {}
+    assert error.value.status_code == status.HTTP_303_SEE_OTHER
+    assert error.value.headers == {"Location": "/login"}
 
 
 def test_require_admin_returns_admin_user_id(db: Session) -> None:
