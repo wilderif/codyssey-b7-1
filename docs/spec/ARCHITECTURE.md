@@ -170,11 +170,13 @@ def require_admin(...): ...
 
 - `User`는 역할을 저장하는 `role` field를 포함합니다. 일반 회원가입 계정은 일반 사용자,
   초기 `admin` 계정은 관리자 역할로 생성합니다.
-- `ensure_initial_admin()`은 시작 시 `admin` 계정 존재 여부를 확인합니다. 기존
-  계정이 있으면 비밀번호를 바꾸지 않고 종료하며, 없으면 실행 설정에서 제공된 초기 관리자
-  password를 검증·hash하여 생성합니다.
-- 계정이 없는데 password가 누락되었거나 유효하지 않으면 명확한 설정 오류로 시작을 중단하고,
-  원인을 식별 가능한 log에 남깁니다. 초기 비밀번호 원문은 기록하지 않습니다.
+- `ensure_initial_admin()`은 시작 시 `role=admin` 계정 존재 여부를 확인합니다. username과 관계없이
+  관리자 역할 계정이 하나라도 있으면 기존 계정을 변경하지 않고 종료합니다.
+- 관리자 역할 계정이 없으면 실행 설정에서 제공된 초기 관리자 password를 검증·hash하여 username
+  `admin`, role `admin`인 초기 계정을 생성합니다. 이때 username `admin`이 일반 사용자 역할로 이미
+  존재하면 자동 승격하지 않고 명확한 설정 오류로 시작을 중단합니다.
+- 초기 관리자 생성이 필요한데 password가 누락되었거나 유효하지 않으면 시작을 중단하고 원인을
+  식별 가능한 log에 남깁니다. 초기 비밀번호 원문은 기록하지 않습니다.
 - Auth는 session에 사용자 ID를 저장·조회·삭제하는 public helper의 mechanics를 소유합니다.
   UI Router는 session key를 직접 읽거나 쓰지 않고, login 인증 성공과 logout 요청에서 이 helper를
   호출합니다.
