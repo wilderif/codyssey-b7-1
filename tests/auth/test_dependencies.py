@@ -8,7 +8,13 @@ import pytest
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user_id, require_admin
+from app.auth.dependencies import (
+    clear_session_user_id,
+    get_current_user_id,
+    get_session_user_id,
+    require_admin,
+    set_session_user_id,
+)
 from app.auth.models import ADMIN_ROLE
 from app.auth.repository import create_user
 
@@ -30,6 +36,36 @@ def test_get_current_user_id_returns_session_user_id() -> None:
     request = make_request({"user_id": 42})
 
     assert get_current_user_id(request) == 42
+
+
+def test_set_session_user_id_replaces_existing_session_data() -> None:
+    request = make_request({"stale": "value", "user_id": 1})
+
+    set_session_user_id(request, user_id=42)
+
+    assert request.session == {"user_id": 42}
+    assert get_session_user_id(request) == 42
+
+
+@pytest.mark.parametrize("user_id", [True, 0, -1])
+def test_set_session_user_id_rejects_invalid_id_without_changing_session(
+    user_id: int,
+) -> None:
+    request = make_request({"stale": "value"})
+
+    with pytest.raises(ValueError, match="user_id"):
+        set_session_user_id(request, user_id=user_id)
+
+    assert request.session == {"stale": "value"}
+
+
+def test_clear_session_user_id_removes_all_session_data() -> None:
+    request = make_request({"user_id": 42, "stale": "value"})
+
+    clear_session_user_id(request)
+
+    assert request.session == {}
+    assert get_session_user_id(request) is None
 
 
 @pytest.mark.parametrize(

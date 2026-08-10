@@ -157,24 +157,36 @@ from app.auth.service import (
     ensure_initial_admin,
     register_user,
 )
-from app.auth.dependencies import get_current_user_id, require_admin
+from app.auth.dependencies import (
+    clear_session_user_id,
+    get_current_user_id,
+    get_session_user_id,
+    require_admin,
+    set_session_user_id,
+)
 ```
 
 ```python
 def register_user(*, db: Session, username: str, password: str) -> User: ...
 def authenticate_user(*, db: Session, username: str, password: str) -> User | None: ...
-def ensure_initial_admin(*, db: Session) -> None: ...
+def ensure_initial_admin(*, db: Session, app_settings: Settings) -> None: ...
+def set_session_user_id(request: Request, *, user_id: int) -> None: ...
+def get_session_user_id(request: Request) -> int | None: ...
+def clear_session_user_id(request: Request) -> None: ...
 def get_current_user_id(request: Request) -> int: ...
 def require_admin(...): ...
 ```
 
 - `User`는 역할을 저장하는 `role` field를 포함합니다. 일반 회원가입 계정은 일반 사용자,
   초기 `admin` 계정은 관리자 역할로 생성합니다.
-- `ensure_initial_admin()`은 시작 시 `admin` 계정 존재 여부를 확인합니다. 기존
-  계정이 있으면 비밀번호를 바꾸지 않고 종료하며, 없으면 실행 설정에서 제공된 초기 관리자
-  password를 검증·hash하여 생성합니다.
-- 계정이 없는데 password가 누락되었거나 유효하지 않으면 명확한 설정 오류로 시작을 중단하고,
-  원인을 식별 가능한 log에 남깁니다. 초기 비밀번호 원문은 기록하지 않습니다.
+- `ensure_initial_admin()`은 시작 시 `role=admin` 계정 존재 여부를 확인합니다. username과 관계없이
+  관리자 역할 계정이 하나라도 있으면 기존 계정을 변경하지 않고 종료합니다.
+- 관리자 역할 계정이 없으면 `create_app()`에서 전달된 실행 설정의 초기 관리자 password를
+  검증·hash하여 username
+  `admin`, role `admin`인 초기 계정을 생성합니다. 이때 username `admin`이 일반 사용자 역할로 이미
+  존재하면 자동 승격하지 않고 명확한 설정 오류로 시작을 중단합니다.
+- 초기 관리자 생성이 필요한데 password가 누락되었거나 유효하지 않으면 시작을 중단하고 원인을
+  식별 가능한 log에 남깁니다. 초기 비밀번호 원문은 기록하지 않습니다.
 - Auth는 session에 사용자 ID를 저장·조회·삭제하는 public helper의 mechanics를 소유합니다.
   UI Router는 session key를 직접 읽거나 쓰지 않고, login 인증 성공과 logout 요청에서 이 helper를
   호출합니다.
@@ -230,7 +242,8 @@ from app.auth.dependencies import require_admin
 - Admin Router는 권한 dependency와 Admin Service를 연결해 read-only 운영 metadata를 UI template에
   전달합니다.
 - `app/main.py`는 UI·Chat·Admin router, SessionMiddleware, logging, health, `init_db()`를 연결하고,
-  DB 초기화 후 요청을 받기 전에 `ensure_initial_admin()`을 호출합니다.
+  DB 초기화 후 요청을 받기 전에 `create_app()`이 선택한 실행 설정을 전달하여
+  `ensure_initial_admin()`을 호출합니다.
 - server log는 요청 수신, AI 호출·응답, DB 저장 성공·실패를 application logging으로 남깁니다.
   `/admin/logs`는 server runtime log file을 표시하는 화면이 아닙니다.
 
