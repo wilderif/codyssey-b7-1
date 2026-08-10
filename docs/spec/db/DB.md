@@ -40,10 +40,10 @@
 | `status` | String | Not Null, `success` 또는 `failed` |
 | `error_message` | Text | Nullable, 안전한 내부 요약만 저장 |
 | `created_at` | DateTime | Not Null, UTC |
-| `request_id` | String(64) | Unique, Not Null. 채팅 요청 추적 ID |
-| `user_agent` | String(512) | Nullable. User-Agent, 최대 512자 |
-| `response_time_ms` | Integer | Not Null, 0 이상. Chat Service 질문 처리 시작부터 성공/실패 ChatExchange를 DB에 저장하기 위해 Repository에 전달하는 시점까지의 application 처리 시간(ms). DB `commit()` 시간은 제외 |
-| `error_code` | String(50) | Nullable. 실패 원인 분류 code, 성공 시 Null |
+| `request_id` | String(64) | Unique, Not Null |
+| `user_agent` | String(512) | Nullable |
+| `response_time_ms` | Integer | Not Null, 0 이상. 처리 시간(ms) |
+| `error_code` | String(50) | Nullable |
 
 ## 3. 상태와 운영 metadata 불변식
 
@@ -142,7 +142,36 @@ error response는 [API 계약](../api/API.md)을 따릅니다.
 - 환경별 SQLite 연결 URL, deployment Volume과 restart persistence configuration은
   [실행·배포 계약](../DEPLOYMENT.md)을 따릅니다.
 
-## 7. 평가자 확인 방법
+## 7. Schema 변경과 migration
+
+현재 초기 버전은 SQLAlchemy model과 `Base.metadata.create_all()`을 사용해 table을 생성합니다.
+
+`create_all()`은 기존 table의 column 변경, 삭제, rename 등 schema migration을 수행하지 않으므로
+기존 DB schema가 변경되는 경우 application 시작만으로 migration이 완료된 것으로 간주하지 않습니다.
+
+### Schema 변경 절차
+
+1. 변경 전 SQLite DB를 backup합니다.
+2. 기존 schema와 target schema의 차이를 확인합니다.
+3. 데이터 보존이 필요한 변경은 명시적인 migration script를 작성합니다.
+4. test DB에서 migration을 먼저 실행합니다.
+5. 기존 record와 constraint가 유지되는지 검증합니다.
+6. application code와 schema contract를 함께 배포합니다.
+7. migration 후 `scripts/check_logs.sql` 등 검증 절차로 데이터를 확인합니다.
+
+### 초기 버전 정책
+
+개발 단계에서 기존 데이터를 보존할 필요가 없는 경우에는 DB file을 제거하고 `create_all()`로
+schema를 다시 생성할 수 있습니다.
+
+기존 데이터를 보존해야 하는 환경에서는 DB file 삭제를 migration 방법으로 사용하지 않습니다.
+
+### Migration tool 도입 기준
+
+column rename/delete, constraint 변경, 복수 환경의 schema version 관리 등 반복 가능한 migration이
+필요해지면 Alembic 도입을 검토합니다.
+
+## 8. DB 검증 방법
 
 > 🔎 아래 명령은 구현 후 실제 DB file이 생성된 뒤 실행합니다. `scripts/check_logs.sql`은
 > 운영 확인에 필요한 안전한 field만 출력합니다.

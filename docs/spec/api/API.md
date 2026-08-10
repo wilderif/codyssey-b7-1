@@ -79,6 +79,8 @@
 
 ## 4. Chat API 요청과 응답
 
+OpenAI message 구성과 호출 정책은 [AI 호출 계약](../ai/AI.md)을 따릅니다.
+
 ### 요청
 
 ```http
@@ -185,3 +187,60 @@ Chat use case와 transaction 책임은 [Architecture](../ARCHITECTURE.md), 저�
 
 - `GET /health`, 인증 불필요, 정상 `200`
 - OpenAI를 호출하지 않고 초기 버전에서는 DB 연결도 검사하지 않음
+
+## 9. API schema와 호환성 정책
+
+`/api/...` JSON API의 request와 response는 Pydantic schema로 정의합니다. Router는 request model과
+`response_model`을 사용해 외부 API schema를 명시적으로 제한합니다.
+
+현재 JSON API는 `/api/...` 경로를 사용하며 별도의 URL version prefix를 두지 않습니다. 현재 단계에서는
+Browser frontend와 backend가 하나의 application으로 함께 배포되므로, 호환 가능한 변경은 기존 API
+경로에서 적용합니다.
+
+### 호환 가능한 변경
+
+다음 변경은 기존 client 동작을 깨지 않는 경우 같은 API 계약에서 적용할 수 있습니다.
+
+- response에 optional field 추가
+- 기존 의미와 type을 유지한 설명·validation 보완
+- 기존 error code의 의미를 변경하지 않는 내부 구현 변경
+
+### Breaking change
+
+다음 변경은 breaking change로 취급합니다.
+
+- 기존 request field 삭제 또는 rename
+- 기존 optional request field를 required로 변경
+- request/response field type 변경
+- 기존 response field 삭제 또는 rename
+- 기존 field의 null 허용 여부를 더 엄격하게 변경
+- 기존 HTTP status 또는 안정적인 error `code`의 의미 변경
+- 동일한 입력에 대한 API 의미를 호환되지 않게 변경
+
+Breaking change를 기존 endpoint에 조용히 적용하지 않습니다.
+
+### Version 관리
+
+현재 application은 외부 독립 client를 제공하지 않으므로 `/api/v1` 같은 URL version을 선제적으로
+도입하지 않습니다.
+
+향후 mobile application, 외부 API consumer 또는 frontend/backend 독립 배포처럼 이전 contract를
+유지해야 하는 client가 생긴 상태에서 breaking change가 필요하면 versioned API를 도입합니다.
+
+```text
+/api/v1/chat
+/api/v2/chat
+```
+
+새 version을 도입하는 동안 기존 version은 명시된 deprecation 기간 동안 유지하고, 제거 시점과
+migration 방법을 API 문서에 기록합니다.
+
+### 변경 절차
+
+API schema를 변경하는 PR은 다음을 함께 갱신합니다.
+
+- Pydantic request/response schema
+- Router의 `response_model`과 response 선언
+- 관련 API test
+- 이 API 계약의 request/response 예시
+- breaking 여부와 필요한 version 변경

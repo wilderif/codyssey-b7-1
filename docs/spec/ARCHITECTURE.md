@@ -193,6 +193,8 @@ from app.chat.service import (
 
 - `process_chat()`은 질문 검증, 사용자 대화 문맥, OpenAI 호출과 성공·실패 record 저장을
   책임집니다. 성공 또는 실패 record 저장이 완료된 뒤 결과나 OpenAI 오류를 반환합니다.
+- 사용 model, system prompt와 OpenAI message 구성의 상세 계약은 [AI 호출 계약](ai/AI.md)을
+  따릅니다.
 - Chat Router는 공용 request ID interface에서 받은 ID를 `process_chat()`에 명시적으로
   전달합니다.
 - DB 저장 실패는 rollback하며, 외부 HTTP 결과는 [API 계약](api/API.md)을 따릅니다.
