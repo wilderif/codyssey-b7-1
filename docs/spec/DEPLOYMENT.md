@@ -9,7 +9,7 @@
 ```text
 SESSION_SECRET=
 OPENAI_API_KEY=
-OPENAI_MODEL=
+OPENAI_MODEL=gpt-5-nano
 OPENAI_TIMEOUT_SECONDS=30
 DATABASE_URL=sqlite:///./data/chatbot.db
 APP_ENV=local
@@ -22,7 +22,7 @@ ADMIN_INITIAL_PASSWORD=
 | --- | --- | --- |
 | `SESSION_SECRET` | 기본값 없음 | Signed session cookie에 사용하는 secret. Application 시작 전에 비어 있지 않은 값을 제공하고 repository에 실제 값을 기록하지 않음 |
 | `OPENAI_API_KEY` | 기본값 없음 | Server의 OpenAI API 인증 secret. Browser에 노출하거나 repository에 실제 값을 기록하지 않음 |
-| `OPENAI_MODEL` | 기본값 없음 | Chat answer 생성에 사용할 OpenAI model |
+| `OPENAI_MODEL` | 설정값: `gpt-5-nano` | Chat answer 생성에 사용할 OpenAI model. 현재 비용 우선 선택값 |
 | `OPENAI_TIMEOUT_SECONDS` | `30` | OpenAI request timeout. 0보다 큰 숫자만 허용 |
 | `DATABASE_URL` | `sqlite:///./data/chatbot.db` | Local SQLite 연결 URL |
 | `APP_ENV` | `local`; `production` 허용 | 실행 environment를 구분. `production`에서는 production 보안·설정 validation을 적용 |
@@ -61,8 +61,9 @@ ADMIN_INITIAL_PASSWORD=
 - `APP_ENV=production`
 - `DATABASE_URL=sqlite:////data/chatbot.db`
 - `ADMIN_USERNAME=admin`
-- `SESSION_SECRET`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `ADMIN_INITIAL_PASSWORD`는 Railway Variables에서
-  실제 값을 제공합니다.
+- `OPENAI_MODEL=gpt-5-nano`
+- `SESSION_SECRET`, `OPENAI_API_KEY`, `ADMIN_INITIAL_PASSWORD`는 Railway Variables에서 실제 값을
+  제공합니다.
 - `OPENAI_TIMEOUT_SECONDS`와 `LOG_LEVEL`은 공통 기본값을 사용하거나 Railway Variables에서 유효한
   값으로 override할 수 있습니다.
 

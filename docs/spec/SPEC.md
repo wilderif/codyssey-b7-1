@@ -23,6 +23,7 @@ HTTP, persistence, module interface, Frontend, 실행·배포 계약은 각 소�
 | Architecture와 module interface | [Architecture](ARCHITECTURE.md) |
 | HTTP와 API | [API 계약](api/API.md) |
 | DB와 persistence | [DB schema 계약](db/DB.md) |
+| AI 호출과 message 구성 | [AI 호출 계약](ai/AI.md) |
 | Frontend 동작 | [Frontend UI 계약](ui/UI.md) |
 | Environment, 실행과 배포 | [실행·배포 계약](DEPLOYMENT.md) |
 

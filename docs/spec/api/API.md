@@ -79,6 +79,8 @@
 
 ## 4. Chat API 요청과 응답
 
+OpenAI message 구성과 호출 정책은 [AI 호출 계약](../ai/AI.md)을 따릅니다.
+
 ### 요청
 
 ```http
