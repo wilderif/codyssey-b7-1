@@ -10,13 +10,13 @@ HTTP, persistence, module interface, Frontend, 실행·배포 계약은 각 소�
 ## 2. 최종 결과물
 
 - 정상 동작하는 FastAPI web application 1개
-- 평가 시점에 외부 network에서 접속 가능한 service URL
+- 운영 환경에서 외부 network로 접속 가능한 service URL
 - GitHub repository link와 검증 가능한 문서 package
 
 ## 3. 기술 계약 안내
 
 - Application은 Python과 FastAPI 기반의 modular monolith로 구성합니다.
-- 대화 기록은 평가자가 확인할 수 있는 persistence storage에 저장합니다.
+- 대화 기록은 운영자가 확인할 수 있는 persistence storage에 저장합니다.
 
 | 기술 영역 | 상세 계약 |
 | --- | --- |
@@ -80,7 +80,7 @@ Server log에 다음 event와 성공·실패 여부를 기록해야 한다.
 
 ## 7. 배포 요구사항
 
-- 평가 시점에 배포된 service를 외부 network에서 사용할 수 있어야 한다.
+- 배포된 service를 외부 network에서 사용할 수 있어야 한다.
 - 실행, 배포, environment variable 설정은 [실행·배포 계약](DEPLOYMENT.md)을 따릅니다.
 
 ## 8. 협업과 형상관리

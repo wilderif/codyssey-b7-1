@@ -40,10 +40,10 @@
 | `status` | String | Not Null, `success` 또는 `failed` |
 | `error_message` | Text | Nullable, 안전한 내부 요약만 저장 |
 | `created_at` | DateTime | Not Null, UTC |
-| `request_id` | String(64) | Unique, Not Null. 채팅 요청 추적 ID |
-| `user_agent` | String(512) | Nullable. User-Agent, 최대 512자 |
-| `response_time_ms` | Integer | Not Null, 0 이상. Chat Service 질문 처리 시작부터 성공/실패 ChatExchange를 DB에 저장하기 위해 Repository에 전달하는 시점까지의 application 처리 시간(ms). DB `commit()` 시간은 제외 |
-| `error_code` | String(50) | Nullable. 실패 원인 분류 code, 성공 시 Null |
+| `request_id` | String(64) | Unique, Not Null |
+| `user_agent` | String(512) | Nullable |
+| `response_time_ms` | Integer | Not Null, 0 이상. 처리 시간(ms) |
+| `error_code` | String(50) | Nullable |
 
 ## 3. 상태와 운영 metadata 불변식
 
@@ -171,7 +171,7 @@ schema를 다시 생성할 수 있습니다.
 column rename/delete, constraint 변경, 복수 환경의 schema version 관리 등 반복 가능한 migration이
 필요해지면 Alembic 도입을 검토합니다.
 
-## 8. 평가자 확인 방법
+## 8. DB 검증 방법
 
 > 🔎 아래 명령은 구현 후 실제 DB file이 생성된 뒤 실행합니다. `scripts/check_logs.sql`은
 > 운영 확인에 필요한 안전한 field만 출력합니다.
