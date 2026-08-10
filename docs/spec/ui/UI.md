@@ -1,9 +1,8 @@
 # Frontend UI 계약
 
-> 🖥️ 이 페이지가 화면 구조, Browser 상태, interaction, 접근성, responsive 동작의 단일
-> 기준입니다. HTTP status·request·response·오류 `code`는 [API 계약](../api/API.md),
-> module 의존 방향은 [Architecture](../ARCHITECTURE.md)를 따릅니다. 현재는 계약만 확정되었고
-> 구현 결과를 의미하지 않습니다.
+이 문서는 화면 구조, form layout, Browser 상태, interaction, 접근성과 responsive 동작을 정의합니다.
+HTTP status·request·response·오류 `code`는 [API 계약](../api/API.md), module 의존 방향은
+[Architecture](../ARCHITECTURE.md)를 따릅니다. 이 문서는 구현 완료 상태를 의미하지 않습니다.
 
 ## 1. 범위와 기술 경계
 
@@ -18,147 +17,48 @@
 - 구체적인 색상, spacing, typography 값은 구현 세부사항입니다. 다만 모든 화면에서 같은 시각
   규칙을 사용하고 상태·focus를 명확히 구분해야 합니다.
 
-## 2. 화면별 API 경로와 응답 형식
+## 2. 화면과 server 경로 연결
+
+이 section은 각 화면이 server 경로를 어떻게 사용하는지 설명합니다. 정확한 HTTP method, status,
+redirect, request와 response schema는 [API 계약](../api/API.md)을 따릅니다.
 
 ### `/`
 
-#### 화면 진입 (`GET`)
-
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않습니다.
-- 로그인 사용자는 `303 /chat`, 비로그인 사용자는 `303 /login`으로 이동합니다.
+- 별도 page를 rendering하지 않으며, server가 인증 상태에 따라 Login 또는 Chat 화면으로 이동시킵니다.
 
 ### `/signup`
 
-#### 화면 조회 (`GET`)
-
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않고 `200 signup.html`을 rendering합니다.
-
-#### 회원가입 제출 (`POST`)
-
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않습니다.
-- 성공하면 자동 login 없이 `303 /login`으로 이동합니다.
-- 중복 username이나 길이 오류가 발생하면 사용자용 message와 함께 같은 화면을 `400`으로
-  rendering합니다.
+- `signup.html`에 username·password form과 Login 화면 link를 rendering합니다.
+- Form은 같은 경로로 제출합니다. 성공 시 Browser는 Login 화면으로 이동하고, 입력 오류 시 같은
+  화면에 안전한 message를 표시합니다.
 
 ### `/login`
 
-#### 화면 조회 (`GET`)
-
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않고 `200 login.html`을 rendering합니다.
-
-#### Login 제출 (`POST`)
-
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않습니다.
-- 성공하면 session을 생성하고 `303 /chat`으로 이동합니다.
-- 인증에 실패하면 `아이디 또는 비밀번호가 올바르지 않습니다.` message와 함께 같은 화면을
-  `400`으로 rendering합니다.
+- `login.html`에 username·password form과 회원가입 화면 link를 rendering합니다.
+- Form은 같은 경로로 제출합니다. 성공 시 Browser는 Chat 화면으로 이동하고, 인증 실패 시 같은
+  화면에 안전한 message를 표시합니다.
 
 ### `/chat`
 
-#### 화면 조회 (`GET`)
-
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않고 `200 chat.html`을 rendering합니다.
+- `chat.html`에 질문 form과 로그인 사용자의 이전 대화를 함께 rendering합니다.
 - `chat_exchanges` template variable에는 `chat_exchange_id`, `question`, `answer`, `status`,
   `created_at` field가 포함됩니다.
-- 비로그인 사용자는 `303 /login`으로 이동합니다.
-
-#### 질문 전송 (`POST`)
-
-##### 사용할 API 경로
-
-- `POST /api/chat`
-
-##### 성공 응답 JSON
-
-```json
-{
-  "chat_exchange_id": 15,
-  "answer": "FastAPI는 Python 기반의 웹 프레임워크입니다.",
-  "created_at": "2026-08-04T06:00:00Z"
-}
-```
-
-##### 오류 응답 JSON
-
-```json
-{
-  "code": "...",
-  "detail": "..."
-}
-```
-
-- 정확한 HTTP status와 `code`·`detail`은
-  [API 계약의 오류 응답](../api/API.md#6-오류-응답)을 따릅니다.
+- Browser JavaScript는 `POST /api/chat`을 호출해 pending Chat 항목을 실제 답변 또는 오류로
+  교체합니다. 사용하는 JSON field와 오류 contract는 [API 계약](../api/API.md)을 따릅니다.
 
 ### `/admin/logs`
 
-#### 화면 조회 (`GET`)
-
-##### 사용할 API 경로
-
-- 별도 JSON API는 사용하지 않습니다. `app/admin/router.py`가 Admin Service의 9-field projection을
-  `admin_logs.html`에 전달합니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않고 관리자에게 `200 admin_logs.html`을 rendering합니다.
-- 비로그인 사용자는 `303 /login`으로 이동하고 비관리자는 `403`을 반환합니다.
-- 관리자 화면에는 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
-  `user_agent`, `response_time_ms`, `status`, `error_code` field를 제공합니다.
+- 별도 JSON API를 사용하지 않고 `admin_logs.html`에 허용된 read-only 운영 metadata를 table로
+  rendering합니다.
+- 표시 가능한 projection field는 [DB schema 계약](../db/DB.md#관리자-운영-metadata-조회)을
+  따릅니다.
 - `app/ui`는 `/admin/logs`의 접근 제어와 관리자 데이터 조합을 담당하지 않습니다.
 
 ### `/logout`
 
-#### Logout 제출 (`POST`)
+- Logout button은 `/logout` form을 제출하고 server 응답에 따라 Login 화면으로 이동합니다.
 
-##### 사용할 API 경로
-
-- 추후 추가 예정입니다.
-
-##### 응답 JSON
-
-- JSON 응답은 사용하지 않습니다.
-- 로그인 여부와 관계없이 session을 삭제하고 `303 /login`으로 이동합니다.
-
-정확한 HTTP status와 redirect는 [API 계약의 HTML·form 경로](../api/API.md#2-html폼-경로)를
-따릅니다. Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 관리자 권한은 server가
-최종 판별합니다.
+Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 관리자 권한은 server가 최종 판별합니다.
 
 ## 3. 공통 UI 기준
 
@@ -195,8 +95,8 @@
 ### 기본 상태
 
 - Username과 password 입력, 회원가입 button, Login 화면으로 이동하는 link를 제공합니다.
-- Username은 앞뒤 공백 제거 후 3~30자, password는 8~72자입니다. 최종 검증 규칙과 오류
-  처리는 [API 계약](../api/API.md#2-html폼-경로)을 따릅니다.
+- Browser form control은 [API 계약](../api/API.md#2-html폼-경로)의 username·password 검증 조건을
+  반영합니다. 최종 검증은 server가 수행합니다.
 
 ### 오류 표시
 
@@ -277,7 +177,7 @@
 - 처리 오류는 pending Chat 항목의 Loading을 안전한 오류 message로 교체합니다. 실패 Chat
   항목에는 임의의 `chat_exchange_id`나 시각을 만들지 않습니다.
 - Pending Chat 항목에 표시된 실패 결과 자체는 영구 저장의 증거가 아닙니다. 일부 server 오류는
-  [API 계약의 저장 정책](../api/API.md#7-문맥openai저장-정책)에 따라 실패 record로 저장될 수
+  [DB schema 계약의 저장 정책](../db/DB.md#5-저장-정책)에 따라 실패 record로 저장될 수
   있으며, 새로고침 후에는 `GET /chat`이 rendering한 실제 server history만 표시합니다.
 - 성공·실패와 관계없이 현재 작성 중인 다음 질문 draft를 비우거나 전송한 질문을 복원하지
   않습니다.
@@ -312,8 +212,8 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
   `admin_logs.html`과 공통 static 표현 자원만 제공합니다.
 - Logout button은 `POST /logout` form으로 동작하며, `/chat`으로 돌아가는 link를 함께
   제공합니다.
-- 기본 column은 `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`, `user_agent`,
-  `response_time_ms`, `status`, `error_code`입니다.
+- [DB schema 계약](../db/DB.md#관리자-운영-metadata-조회)에 정의된 안전한 projection field를
+  각각 table column으로 표시합니다.
 - Nullable 값은 빈 cell 대신 `-`처럼 값이 없음을 알 수 있는 text로 표시합니다.
 - Record가 없으면 table 대신 `표시할 운영 기록이 없습니다.`를 표시합니다.
 - `status`와 `error_code`는 색상만으로 구분하지 않고 text를 그대로 제공합니다.

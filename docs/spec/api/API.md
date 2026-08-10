@@ -1,7 +1,7 @@
 # API 계약
 
-> 📑 이 페이지가 HTTP 경로, session, 입력, 응답, 오류의 단일 기준입니다. 현재는 계약만
-> 확정되었고 구현 결과를 의미하지 않습니다.
+이 문서는 현재 repository가 따르는 HTTP/API 계약을 정의합니다. 구현 변경으로 계약이 달라지는
+경우 code와 이 문서를 같은 변경에서 함께 갱신합니다. 이 문서는 구현 완료 상태를 의미하지 않습니다.
 
 ## 1. 공통 계약
 
@@ -9,11 +9,11 @@
 | --- | --- |
 | 인증 | Starlette `SessionMiddleware`의 서명된 session cookie 사용. JWT·token 인증 없음 |
 | Session data | 로그인 사용자 ID만 저장. 서명되지만 암호화된 저장소로 간주하지 않음 |
-| Secret key | `SESSION_SECRET` environment variable에서 load |
+| Secret key | SessionMiddleware는 application 실행 설정에서 제공되는 session secret을 사용. 설정 key와 환경별 값은 [실행·배포 계약](../DEPLOYMENT.md)을 따름 |
 | 만료 | 8시간(`max_age=28800`) |
 | Cookie | `HttpOnly=true`, `SameSite=Lax`, 배포 환경 `Secure=true` |
 | Request ID | server가 request마다 생성하고 `X-Request-ID` response header로 반환. client 제공 값은 재사용하지 않음 |
-| 관리자 | `users.role`로 판별. 초기 username은 `admin` 하나이며 `ADMIN_USERNAME=admin`만 허용. 최초 생성 password는 `ADMIN_INITIAL_PASSWORD` |
+| 관리자 | `users.role`로 판별. 초기 관리자 bootstrap은 [Architecture](../ARCHITECTURE.md)의 Auth 계약을 따름 |
 | 시간 | DB는 UTC, API는 UTC ISO 8601(`Z`) 사용 |
 | 내부정보 | SQL 오류, 전체 stack, key, cookie, 내부 `error_message`를 API·화면에 노출하지 않음 |
 
@@ -54,8 +54,8 @@
 `GET /admin/logs`는 관리자만 접근하는 읽기 전용 화면이며 server runtime log file을 보여주지
 않습니다. `chat_exchanges`에 저장된 사용자별 운영 metadata를 조회합니다.
 
-- 기본 조회 항목: `user_id`, `username`, `chat_exchange_id`, `created_at`, `request_id`,
-  `user_agent`, `response_time_ms`, `status`, `error_code`
+- Template에 전달하는 field는 [DB schema 계약](../db/DB.md#관리자-운영-metadata-조회)의 안전한
+  Admin projection을 따릅니다.
 - `app/admin/router.py`가 `require_admin`으로 접근을 검사하고 Admin Service의 projection을
   `admin_logs.html`에 전달합니다. UI는 route와 관리자 데이터 조합을 담당하지 않습니다.
 - 질문·답변 원문, 내부 `error_message`, `password_hash`와 그 밖의 민감정보는 projection과 화면에서
@@ -146,7 +146,7 @@ locale에 따라 변환되는 사용자용 안전 message입니다.
 | `500` | DB 저장 실패 | `db_save_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
 | `500` | 분류되지 않은 내부 오류 | `internal_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
 | `502` | OpenAI API 오류 | `openai_api_error` | `AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.` |
-| `504` | OpenAI 30초 timeout | `openai_timeout` | `AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.` |
+| `504` | OpenAI 요청 timeout | `openai_timeout` | `AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.` |
 
 - 단일 `AppError`와 공통 handler가 프로젝트 정의 오류를 `code`·`detail` 형식으로 변환합니다.
   오류별 하위 예외 class는 만들지 않습니다.
@@ -164,23 +164,18 @@ locale에 따라 변환되는 사용자용 안전 message입니다.
 - 예를 들어 `openai_api_error`의 `en` detail은
   `Failed to generate an AI response. Please try again later.`입니다.
 
-## 7. 문맥·OpenAI·저장 정책
+## 7. Chat 처리 결과의 HTTP 변환
 
-1. 로그인 사용자 ID로 `status=success` record만 `created_at DESC` 최대 5개 조회합니다.
-2. 다른 사용자의 record와 `failed` record는 제외하고, 결과를 오래된 순서로 뒤집습니다.
-3. system prompt → 과거 user·assistant 최대 5쌍 → 현재 user 순서로 message를 구성합니다.
-4. `settings.openai_model`, `OPENAI_TIMEOUT_SECONDS=30`을 사용하며 자동 retry는 하지 않습니다.
+Chat use case와 transaction 책임은 [Architecture](../ARCHITECTURE.md), 저장 record의 상태와 불변식은
+[DB schema 계약](../db/DB.md)을 따릅니다. OpenAI model과 timeout 설정값은
+[실행·배포 계약](../DEPLOYMENT.md)에서 정의합니다.
 
-- 성공: `status=success`, `error_code=null` record를 UTC 시각·운영 metadata와 함께 저장한 뒤 `200`을 반환합니다.
-- OpenAI 오류: `status=failed`, `error_code=openai_api_error` record를 저장한 뒤 `502`를 반환합니다.
-- timeout: `status=failed`, `error_code=openai_timeout` record를 저장한 뒤 `504`를 반환합니다.
-- 분류되지 않은 내부 오류는 `500 internal_error`이며 안전하게 저장 가능한 실패 경로라면
-  `error_code=internal_error`를 저장할 수 있습니다.
-- DB 저장 자체가 실패하면 같은 DB에 실패 record를 남기지 않고 `db_save_failed`를 server log에
-  남긴 뒤 `500 db_save_error`를 반환합니다.
-- `validation_error`, `not_authenticated`, `conversation_not_found`, `forbidden`, `db_save_error`는
-  일반적으로 `ChatExchange.error_code`에 저장하지 않습니다.
-
+- 성공 record 저장이 완료된 뒤 `200`을 반환합니다.
+- OpenAI API 오류는 실패 record 저장 후 `502 openai_api_error`를 반환합니다.
+- OpenAI 요청 timeout은 실패 record 저장 후 `504 openai_timeout`을 반환합니다.
+- 분류되지 않은 내부 오류는 `500 internal_error`로 변환합니다.
+- DB 저장 자체가 실패하면 transaction을 rollback하고 `500 db_save_error`를 반환합니다. 같은 DB에
+  실패 record를 추가로 저장하지 않습니다.
 
 ## 8. Health API
 

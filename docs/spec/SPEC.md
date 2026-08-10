@@ -1,5 +1,8 @@
 # AI chatbot service 명세
 
+이 문서는 project의 제품·system 요구사항과 세부 기술 계약의 index를 제공합니다. 구체적인
+HTTP, persistence, module interface, Frontend, 실행·배포 계약은 각 소유 문서에서 정의합니다.
+
 ## 1. 목표
 
 팀 단위로 Linux, web, DB, AI API를 통합한 web 기반 AI chatbot을 개발하고 배포한다.
@@ -10,10 +13,18 @@
 - 평가 시점에 외부 network에서 접속 가능한 service URL
 - GitHub repository link와 검증 가능한 문서 package
 
-## 3. 기술 환경
+## 3. 기술 계약 안내
 
-- Python과 FastAPI를 사용한다.
-- DB는 SQLite를 권장하며, 평가자가 연결하거나 data를 조회할 수 있어야 한다.
+- Application은 Python과 FastAPI 기반의 modular monolith로 구성합니다.
+- 대화 기록은 평가자가 확인할 수 있는 persistence storage에 저장합니다.
+
+| 기술 영역 | 상세 계약 |
+| --- | --- |
+| Architecture와 module interface | [Architecture](ARCHITECTURE.md) |
+| HTTP와 API | [API 계약](api/API.md) |
+| DB와 persistence | [DB schema 계약](db/DB.md) |
+| Frontend 동작 | [Frontend UI 계약](ui/UI.md) |
+| Environment, 실행과 배포 | [실행·배포 계약](DEPLOYMENT.md) |
 
 ## 4. 기능 요구사항
 
@@ -69,7 +80,7 @@ Server log에 다음 event와 성공·실패 여부를 기록해야 한다.
 ## 7. 배포 요구사항
 
 - 평가 시점에 배포된 service를 외부 network에서 사용할 수 있어야 한다.
-- 실행, 배포, environment variable 설정 방법을 문서화해야 한다.
+- 실행, 배포, environment variable 설정은 [실행·배포 계약](DEPLOYMENT.md)을 따릅니다.
 
 ## 8. 협업과 형상관리
 
