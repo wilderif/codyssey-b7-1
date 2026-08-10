@@ -24,30 +24,67 @@
 
 | Method | 경로 | 성공 | 실패·비로그인 | 설명 |
 | --- | --- | --- | --- | --- |
-| `GET` | `/` | 로그인 `303 /chat` · 비로그인 `303 /login` | 해당 없음 | 메인화면 |
+| `GET` | `/` | 유효한 로그인 `303 /chat` · 비로그인·stale session `303 /login` | 해당 없음 | 메인화면 |
 | `GET` | `/signup` | `200 signup.html` | 해당 없음 | 회원가입화면 |
 | `POST` | `/signup` | 자동 로그인 없이 `303 /login` | 동일 화면 `400` | 회원가입 처리 |
 | `GET` | `/login` | `200 login.html` | 해당 없음 | 로그인화면 |
 | `POST` | `/login` | 세션 생성 후 `303 /chat` | 동일 화면 `400` | 로그인 처리 |
 | `POST` | `/logout` | 세션 삭제 후 `303 /login` | 비로그인도 `303 /login` | 로그아웃 처리 |
-| `GET` | `/chat` | 본인 이전 대화와 입력창을 포함한 `200 chat.html` | 비로그인 `303 /login` | 채팅·사용자 대화 로그 화면 |
+| `GET` | `/chat` | 본인 이전 대화와 입력창을 포함한 `200 chat.html` | 비로그인·stale session `303 /login` | 채팅·사용자 대화 로그 화면 |
 | `GET` | `/admin/logs` | 관리자 `200 admin_logs.html` | 비로그인 `303 /login`, 비관리자 `403` | `app/admin/router.py`가 소유하는 관리자 전용 채팅 운영 metadata 조회 화면 |
+| `GET` | `/static/{path}` | 존재하는 CSS·JavaScript asset `200` | 없는 asset `404` | 인증이 필요 없는 UI static asset |
 
 - form 성공 후 이동은 모두 `303 See Other`를 사용합니다.
-- `username`: 앞뒤 공백 제거 후 3~30자, `password`: 8~72자입니다.
+- `username`: 앞뒤 공백 제거 후 Python 문자열 길이 3~30자, `password`: 공백을 제거하지 않은 입력값의
+  Python 문자열 길이 8~72자입니다.
 - 중복 username·길이 오류는 사용자용 message와 함께 동일 화면을 `400`으로 다시 렌더링합니다.
 - 로그인 실패는 `아이디 또는 비밀번호가 올바르지 않습니다.`만 사용해 username 존재 여부를
   구분하지 않습니다.
+- HTML route에서 예상하지 못한 Auth·DB·template 오류가 발생하면 내부정보가 없는
+  `500 text/html` 응답에 `서버 오류가 발생했습니다.`를 표시합니다. JSON 오류 body를 HTML route에
+  사용하지 않습니다.
 - `GET /chat`이 사용자 대화 로그 조회 역할을 겸하며 사용자용 별도 `/logs`는 만들지 않습니다.
+
+### Form request와 template context
+
+- `POST /signup`, `POST /login`, `POST /logout`은 Browser 기본
+  `application/x-www-form-urlencoded` form입니다. File upload와 `multipart/form-data`는 사용하지
+  않습니다.
+- 회원가입·Login form field 이름은 정확히 `username`, `password`입니다. Logout form에는 필수 body
+  field가 없습니다.
+- 회원가입·Login에서 field가 누락되거나 빈 값이면 동일한 입력 오류 정책으로 처리하며 framework의
+  기본 `422` JSON body를 Browser에 노출하지 않습니다.
+- Password는 trim하거나 template context, HTML value, log, URL에 전달하지 않습니다.
+- `signup.html`과 `login.html`의 context는 `error: str | None`, `username: str`을 포함합니다. 최초
+  `GET`은 각각 `error=None`, `username=""`이며 실패한 `POST`는 normalized username과 안전한 오류
+  message만 다시 전달합니다.
+- `RegistrationError.reason`은 다음처럼 `signup.html`의 `error`로 변환합니다.
+
+| `RegistrationReason` | `error` |
+| --- | --- |
+| `username_length` | `아이디는 3자 이상 30자 이하로 입력해주세요.` |
+| `password_length` | `비밀번호는 8자 이상 72자 이하로 입력해주세요.` |
+| `duplicate_username` | `이미 사용 중인 아이디입니다.` |
+
+- Login은 username 누락·password 누락·인증 실패를 구분하지 않고 모두
+  `아이디 또는 비밀번호가 올바르지 않습니다.`로 변환합니다.
+- Template context key는 이 문서에서 정의한 값만 외부 계약입니다. Starlette/FastAPI가 rendering에
+  사용하는 `request` 객체는 business template data로 간주하지 않습니다.
 
 ### Chat 화면 계약
 
 `GET /chat`은 login 사용자의 기록만 최신순으로 조회해 입력창과 함께 `chat.html`을 rendering합니다.
 
-- Template variable: `chat_exchanges`
-- 항목: `chat_exchange_id`, `question`, `answer`, `status`, `created_at`
+- Template context: `{"chat_exchanges": chat_exchanges, "is_admin": is_admin}`
+- `chat_exchanges` 항목: `chat_exchange_id`, `question`, `answer`, `status`, `created_at`
+- `is_admin`: `bool`
 - `answer=null`이고 `status=failed`이면 `답변을 생성하지 못했습니다.` 표시
 - 내부 `error_message`와 운영 metadata는 template에 전달하지 않음
+- `chat_exchanges`는 `list_chat_exchange_history()`의 안전한 projection이며 `is_admin`은 Auth가
+  검증한 `AuthenticatedUser.is_admin`입니다. UI Router가 User Repository나 ORM model을 직접
+  조회하지 않습니다.
+- Session 값이 없거나 유효하지 않거나 대응 User가 없는 stale session이면 history를 조회하거나
+  template을 rendering하지 않고 session을 제거한 뒤 `303 /login`을 반환합니다.
 
 ### 관리자 채팅 운영 metadata 화면 계약
 
@@ -57,7 +94,8 @@
 - Template에 전달하는 field는 [DB schema 계약](../db/DB.md#관리자-운영-metadata-조회)의 안전한
   Admin projection을 따릅니다.
 - `app/admin/router.py`가 `require_admin`으로 접근을 검사하고 Admin Service의 projection을
-  `admin_logs.html`에 전달합니다. UI는 route와 관리자 데이터 조합을 담당하지 않습니다.
+  `admin_logs.html`의 `items` variable에 전달합니다. Context의 business data는 정확히
+  `{"items": items}`이며 UI는 route와 관리자 데이터 조합을 담당하지 않습니다.
 - 질문·답변 원문, 내부 `error_message`, `password_hash`와 그 밖의 민감정보는 projection과 화면에서
   제외합니다.
 - 별도 관리자 JSON API, 관리자 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table은

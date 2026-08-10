@@ -9,9 +9,20 @@ HTTP status·request·response·오류 `code`는 [API 계약](../api/API.md), mo
 - `app/ui`가 Jinja2로 HTML을 server rendering하고 Browser JavaScript가 `POST /api/chat`을
   호출합니다.
 - Frontend는 별도 build 과정 없이 HTML, CSS, vanilla JavaScript로 구성합니다.
-- 화면 router는 Auth·Chat Service만 호출하고 Repository와 OpenAI를 직접 호출하지 않습니다.
+- `app/ui/router.py`는 `GET /`, 회원가입·Login·Logout form route와 `GET /chat`을 소유합니다.
+  `/admin/logs`는 중복 등록하지 않습니다.
+- 화면 router는 Auth public helper·Chat Service만 호출하고 Repository, ORM model과 OpenAI를 직접
+  호출하지 않습니다.
   관리자 화면의 `/admin/logs` route와 관리자 데이터 조합은 `app/admin/router.py`가 소유하며,
   `app/ui`는 `admin_logs.html`과 공통 CSS·JavaScript 등 표현 자원만 제공합니다.
+- 최소 UI file은 `router.py`, `templates/signup.html`, `templates/login.html`,
+  `templates/chat.html`, 기존 `templates/admin_logs.html`, `static/styles.css`,
+  `static/chat.js`입니다. 공통 base template 사용 여부는 구현 세부사항입니다.
+- `app/main.py`는 UI router를 한 번 등록하고 `app/ui/static`을 `/static`에 mount합니다. Template은
+  `/static/styles.css`를 사용하고 Chat 화면만 `/static/chat.js`를 추가로 사용합니다.
+- 보호 HTML 화면은 Auth의 `require_authenticated_user()`가 반환하는 `user_id`와 `is_admin`만
+  사용합니다. 이 public interface가 Auth module에 먼저 추가되어야 하며 UI가 Auth Repository 직접
+  조회로 우회하지 않습니다.
 - 초기 버전에는 React 등 UI framework, 상태관리 library, toast package, streaming, 자동 retry,
   별도 animation library를 도입하지 않습니다.
 - 구체적인 색상, spacing, typography 값은 구현 세부사항입니다. 다만 모든 화면에서 같은 시각
@@ -24,25 +35,31 @@ redirect, request와 response schema는 [API 계약](../api/API.md)을 따릅니
 
 ### `/`
 
-- 별도 page를 rendering하지 않으며, server가 인증 상태에 따라 Login 또는 Chat 화면으로 이동시킵니다.
+- 별도 page를 rendering하지 않으며, server가 실제 User가 확인된 session이면 Chat 화면으로, 그 외에는
+  Login 화면으로 `303` 이동시킵니다. 대응 User가 없는 stale session은 제거합니다.
 
 ### `/signup`
 
 - `signup.html`에 username·password form과 Login 화면 link를 rendering합니다.
 - Form은 같은 경로로 제출합니다. 성공 시 Browser는 Login 화면으로 이동하고, 입력 오류 시 같은
   화면에 안전한 message를 표시합니다.
+- Template context와 `RegistrationReason`별 message는
+  [API 계약의 form contract](../api/API.md#form-request와-template-context)를 그대로 사용합니다.
 
 ### `/login`
 
 - `login.html`에 username·password form과 회원가입 화면 link를 rendering합니다.
 - Form은 같은 경로로 제출합니다. 성공 시 Browser는 Chat 화면으로 이동하고, 인증 실패 시 같은
   화면에 안전한 message를 표시합니다.
+- Template context는 [API 계약의 form contract](../api/API.md#form-request와-template-context)를
+  그대로 사용합니다.
 
 ### `/chat`
 
 - `chat.html`에 질문 form과 로그인 사용자의 이전 대화를 함께 rendering합니다.
 - `chat_exchanges` template variable에는 `chat_exchange_id`, `question`, `answer`, `status`,
   `created_at` field가 포함됩니다.
+- `is_admin: bool` template variable로 관리자 navigation rendering 여부를 결정합니다.
 - Browser JavaScript는 `POST /api/chat`을 호출해 pending Chat 항목을 실제 답변 또는 오류로
   교체합니다. 사용하는 JSON field와 오류 contract는 [API 계약](../api/API.md)을 따릅니다.
 
@@ -50,6 +67,8 @@ redirect, request와 response schema는 [API 계약](../api/API.md)을 따릅니
 
 - 별도 JSON API를 사용하지 않고 `admin_logs.html`에 허용된 read-only 운영 metadata를 table로
   rendering합니다.
+- `app/admin/router.py`가 전달하는 template variable 이름은 `items`입니다. UI는 이 context 이름이나
+  field를 임의로 바꾸지 않습니다.
 - 표시 가능한 projection field는 [DB schema 계약](../db/DB.md#관리자-운영-metadata-조회)을
   따릅니다.
 - `app/ui`는 `/admin/logs`의 접근 제어와 관리자 데이터 조합을 담당하지 않습니다.
@@ -57,6 +76,7 @@ redirect, request와 response schema는 [API 계약](../api/API.md)을 따릅니
 ### `/logout`
 
 - Logout button은 `/logout` form을 제출하고 server 응답에 따라 Login 화면으로 이동합니다.
+- JavaScript logout이나 `GET /logout`은 제공하지 않습니다.
 
 Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 관리자 권한은 server가 최종 판별합니다.
 
@@ -97,24 +117,36 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
 - Username과 password 입력, 회원가입 button, Login 화면으로 이동하는 link를 제공합니다.
 - Browser form control은 [API 계약](../api/API.md#2-html폼-경로)의 username·password 검증 조건을
   반영합니다. 최종 검증은 server가 수행합니다.
+- Form은 `method="post"`, `action="/signup"`이고 input 이름은 `username`, `password`입니다.
+- Username에는 `required`, `minlength="3"`, `maxlength="30"`, `autocomplete="username"`을,
+  password에는 `required`, `minlength="8"`, `maxlength="72"`, `autocomplete="new-password"`를
+  적용합니다.
 
 ### 오류 표시
 
 - 중복 username 또는 길이 오류는 같은 화면의 form과 연결된 오류 영역에 표시합니다.
 - 오류가 발생하면 사용자가 입력한 username은 유지할 수 있지만 password는 HTML이나 template
   context로 다시 전달하거나 채우지 않습니다.
+- 오류 영역은 message가 있을 때 `role="alert"`를 사용하고 관련 control과 `aria-describedby`로
+  연결합니다.
 
 ## 5. Login 화면
 
 ### 기본 상태
 
 - Username과 password 입력, Login button, 회원가입 화면으로 이동하는 link를 제공합니다.
+- Form은 `method="post"`, `action="/login"`이고 input 이름은 `username`, `password`입니다.
+- Username에는 `required`, `maxlength="30"`, `autocomplete="username"`을, password에는
+  `required`, `maxlength="72"`, `autocomplete="current-password"`를 적용합니다. Login 실패의
+  최종 판별과 message 통일은 server가 담당합니다.
 
 ### 오류 표시
 
 - 인증 실패는 username 존재 여부를 구분하지 않고
   `아이디 또는 비밀번호가 올바르지 않습니다.`만 표시합니다.
 - 인증 실패 후 username은 유지할 수 있지만 password는 다시 채우지 않습니다.
+- 오류 영역은 message가 있을 때 `role="alert"`를 사용하고 username·password control과
+  `aria-describedby`로 연결합니다.
 
 ## 6. Chat 화면
 
@@ -130,6 +162,8 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
 | `status` | `success` 또는 `failed` 상태 표시 |
 | `created_at` | UTC 시각 |
 
+- 같은 context의 `is_admin`은 Auth가 검증한 boolean이며, UI가 role 문자열이나 DB record를 직접
+  판별하지 않습니다.
 - 화면은 전달받은 `chat_exchanges`를 역순으로 rendering해 과거 대화를 위쪽에, 최신 대화를
   최하단에 표시합니다.
 - 각 Chat 항목은 사용자 질문을 오른쪽에, server가 반환한 AI 답변 또는 실패 안내를 왼쪽에
@@ -168,12 +202,17 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
 | Submitting | 전송 button을 비활성화하고 질문을 오른쪽에 즉시 추가하며 왼쪽 AI 답변 위치에 `답변 생성 중…`을 표시하고 추가 submit을 무시함 |
 
 - 한 번에 하나의 `POST /api/chat` request만 진행할 수 있습니다.
+- Request는 `fetch("/api/chat")`에 `method: "POST"`, `Content-Type: application/json`,
+  `Accept: application/json`, `credentials: "same-origin"`을 사용하고 body는 정확히
+  `{"message": trimmedQuestion}`입니다.
 - Submitting 중에도 질문 control은 활성 상태로 유지해 다음 질문 draft를 작성할 수 있습니다.
 - Submitting을 시작할 때 전송한 질문과 AI Loading 영역으로 구성한 pending Chat 항목을
   최하단에 추가하고 빈 대화 기록 안내를 제거합니다.
 - 성공하면 pending Chat 항목의 Loading을 응답 `answer`로 교체하고 `chat_exchange_id`와
   `created_at`을 해당 항목에 연결합니다. 같은 질문을 포함한 새 항목을 중복 생성하지 않으며
   별도 성공 status도 표시하지 않습니다.
+- 성공 response의 `answer`는 text로 삽입하고 `created_at`은 UTC 표기와 `time[datetime]`에 사용합니다.
+  Response field가 누락되거나 type이 계약과 다르면 비정상 응답으로 처리합니다.
 - 처리 오류는 pending Chat 항목의 Loading을 안전한 오류 message로 교체합니다. 실패 Chat
   항목에는 임의의 `chat_exchange_id`나 시각을 만들지 않습니다.
 - Pending Chat 항목에 표시된 실패 결과 자체는 영구 저장의 증거가 아닙니다. 일부 server 오류는
@@ -225,7 +264,27 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
 - 좁은 화면에서는 table column을 숨겨 의미를 잃게 하지 않고 table container에 가로 scroll을
   제공합니다.
 
-## 8. 수동 검증 checklist
+현재 `admin_logs.html`은 Admin route와 safe projection을 검증하기 위한 최소 template입니다. UI 작업은
+route·context ownership을 바꾸지 않고 navigation, 빈 상태, nullable `-` 표시, caption, responsive table과
+공통 style을 이 section의 최종 계약에 맞게 보완합니다.
+
+## 8. 구현 handoff
+
+UI/FE 담당 범위는 다음과 같습니다.
+
+1. `app/ui/router.py`에 `/`, Auth form route, `/logout`, `/chat`을 구현합니다.
+2. `signup.html`, `login.html`, `chat.html`, `styles.css`, `chat.js`를 추가하고 기존
+   `admin_logs.html`을 이 문서에 맞게 보완합니다.
+3. `app/main.py`에 UI router와 `/static` mount를 연결합니다. `app/main.py` 소유자와 공용 file 변경을
+   합의하고 Admin·Chat route를 중복 등록하지 않습니다.
+4. HTML route test, template의 민감정보 미노출 test, Chat Browser 상태를 검증하는 JavaScript 또는
+   수동 test를 추가합니다.
+
+착수 전 integration prerequisite는 Auth module의 `require_authenticated_user()`와
+`AuthenticatedUser(user_id, is_admin)`입니다. Chat history·JSON API와 Admin route는 기존 public
+interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을 변경하지 않습니다.
+
+## 9. 수동 검증 checklist
 
 ### 인증 화면
 
