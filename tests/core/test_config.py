@@ -27,18 +27,21 @@ def test_admin_username_defaults_to_admin(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.admin_username == "admin"
 
 
-def test_admin_username_uses_trimmed_environment_override(
+def test_admin_username_accepts_trimmed_admin_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("ADMIN_USERNAME", "  configured-admin  ")
+    monkeypatch.setenv("ADMIN_USERNAME", "  admin  ")
 
     settings = Settings()
 
-    assert settings.admin_username == "configured-admin"
+    assert settings.admin_username == "admin"
 
 
-@pytest.mark.parametrize("username", ["", "   ", "ab", "a" * 31])
-def test_admin_username_rejects_blank_or_out_of_range_values(
+@pytest.mark.parametrize(
+    "username",
+    ["", "   ", "configured-admin", "root", "ab", "a" * 31],
+)
+def test_admin_username_rejects_values_other_than_admin(
     monkeypatch: pytest.MonkeyPatch,
     username: str,
 ) -> None:

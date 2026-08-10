@@ -25,8 +25,8 @@
 | `role` | String | Not Null. 사용자 역할 저장 |
 | `created_at` | DateTime | Not Null, UTC |
 
-일반 회원가입 계정은 일반 사용자 역할로 저장합니다. 초기 관리자 계정의 username은
-`settings.admin_username`을 사용하고 관리자 역할로 저장합니다.
+일반 회원가입 계정은 일반 사용자 역할로 저장합니다. 초기 관리자 계정의 username은 `admin` 하나이며
+관리자 역할로 저장합니다.
 
 ### `chat_exchanges`
 
@@ -41,7 +41,7 @@
 | `created_at` | DateTime | Not Null, UTC |
 | `request_id` | String(64) | Unique, Not Null. 채팅 요청 추적 ID |
 | `user_agent` | String(512) | Nullable. User-Agent, 최대 512자 |
-| `response_time_ms` | Integer | Not Null, 0 이상. 전체 채팅 처리 시간(ms) |
+| `response_time_ms` | Integer | Not Null, 0 이상. Chat Service 질문 처리 시작부터 성공/실패 ChatExchange를 DB에 저장하기 위해 Repository에 전달하는 시점까지의 application 처리 시간(ms). DB `commit()` 시간은 제외 |
 | `error_code` | String(50) | Nullable. 실패 원인 분류 code, 성공 시 Null |
 
 ## 3. 상태와 운영 metadata 불변식
@@ -54,7 +54,10 @@
 DB schema는 `CheckConstraint`로 status 값과 answer·error message 조합을 함께 강제합니다.
 
 - `request_id`: 최대 64자, `UNIQUE`, `NOT NULL`. server log와 DB record를 연결하는 요청별 ID입니다.
-- `response_time_ms`: `NOT NULL`, 0 이상의 정수입니다.
+- `response_time_ms`: `NOT NULL`, 0 이상의 정수입니다. Chat Service 질문 처리 시작부터 성공/실패
+  ChatExchange를 DB에 저장하기 위해 Repository에 전달하는 시점까지를 기록하며 DB `commit()` 시간은
+  포함하지 않습니다. commit 완료 시각을 기록하기 위한 추가 `UPDATE`나 두 번째 `commit()`은 하지
+  않습니다.
 - `error_code`: 최대 50자이며 성공 시 Null입니다.
 - `user_agent`: 최대 512자이며 header가 없으면 Null을 허용합니다.
 - raw header, Cookie, Authorization, session ID, OpenAI API key, password와 `password_hash`는
@@ -179,7 +182,7 @@ error_code
 
 확인 항목:
 
-- `users.role`에 일반 사용자와 `settings.admin_username` 초기 관리자의 역할이 구분되어 저장됨
+- `users.role`에 일반 사용자와 초기 `admin` 관리자의 역할이 구분되어 저장됨
 - `chat_exchanges.user_id`가 로그인 사용자 `users.id`와 연결됨
 - 성공 record에 UTC 시각·`request_id`·`response_time_ms`가 존재함
 - 실패 record는 `answer IS NULL`, `status='failed'`이며 `error_code`로 실패 원인을 분류함

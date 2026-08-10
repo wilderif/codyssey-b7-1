@@ -88,10 +88,10 @@ settings.admin_username
 settings.admin_initial_password
 ```
 
-- 초기 관리자 계정의 username은 `settings.admin_username`을 사용하며, `ADMIN_USERNAME`의 기본값은
-  `admin`입니다.
+- 초기 관리자 계정의 username은 `admin` 하나로 고정합니다. `ADMIN_USERNAME=admin`만 허용하며
+  임의 관리자 username 선택 기능은 제공하지 않습니다.
 - `ADMIN_INITIAL_PASSWORD`는 최초 관리자 생성에만 사용하는 선택적 secret입니다.
-- `settings.admin_username` 계정이 없을 때만 `ADMIN_INITIAL_PASSWORD`가 필수입니다. 이 조건부
+- 초기 `admin` 계정이 없을 때만 `ADMIN_INITIAL_PASSWORD`가 필수입니다. 이 조건부
   검증은 Auth startup Service가 담당하며, `config.py`는 loading·type 변환·validation만 담당합니다.
 - secret 원문은 code, error, `repr`, log와 console 출력에 노출하지 않습니다.
 
@@ -139,8 +139,8 @@ def require_admin(...): ...
 ```
 
 - `User`는 역할을 저장하는 `role` field를 포함합니다. 일반 회원가입 계정은 일반 사용자,
-  초기 `settings.admin_username` 계정은 관리자 역할로 생성합니다.
-- `ensure_initial_admin()`은 시작 시 `settings.admin_username` 계정 존재 여부를 확인합니다. 기존
+  초기 `admin` 계정은 관리자 역할로 생성합니다.
+- `ensure_initial_admin()`은 시작 시 `admin` 계정 존재 여부를 확인합니다. 기존
   계정이 있으면 비밀번호를 바꾸지 않고 종료하며, 없으면 `ADMIN_INITIAL_PASSWORD`를 검증·hash하여
   생성합니다.
 - 계정이 없는데 password가 누락되었거나 유효하지 않으면 명확한 설정 오류로 시작을 중단하고,
