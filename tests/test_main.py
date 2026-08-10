@@ -81,6 +81,7 @@ def test_health_initializes_registered_models_before_serving_requests(
     initialized_tables: list[set[str]] = []
     startup_events: list[str] = []
     db_session = object()
+    configured = _settings()
 
     def record_init_db() -> None:
         startup_events.append("init_db")
@@ -94,14 +95,15 @@ def test_health_initializes_registered_models_before_serving_requests(
         finally:
             startup_events.append("session_closed")
 
-    def record_initial_admin(*, db: object) -> None:
+    def record_initial_admin(*, db: object, app_settings: Settings) -> None:
         assert db is db_session
+        assert app_settings is configured
         startup_events.append("initial_admin_ensured")
 
     monkeypatch.setattr(main_module, "init_db", record_init_db)
     monkeypatch.setattr(main_module, "SessionLocal", session_scope)
     monkeypatch.setattr(main_module, "ensure_initial_admin", record_initial_admin)
-    application = main_module.create_app(_settings())
+    application = main_module.create_app(configured)
 
     with TestClient(application) as client:
         response = client.get("/health")
@@ -124,6 +126,7 @@ def test_admin_bootstrap_failure_closes_session_and_stops_startup(
 ) -> None:
     startup_events: list[str] = []
     db_session = object()
+    configured = _settings()
 
     def record_init_db() -> None:
         startup_events.append("init_db")
@@ -136,15 +139,16 @@ def test_admin_bootstrap_failure_closes_session_and_stops_startup(
         finally:
             startup_events.append("session_closed")
 
-    def fail_initial_admin(*, db: object) -> None:
+    def fail_initial_admin(*, db: object, app_settings: Settings) -> None:
         assert db is db_session
+        assert app_settings is configured
         startup_events.append("initial_admin_failed")
         raise RuntimeError("initial admin bootstrap failed")
 
     monkeypatch.setattr(main_module, "init_db", record_init_db)
     monkeypatch.setattr(main_module, "SessionLocal", session_scope)
     monkeypatch.setattr(main_module, "ensure_initial_admin", fail_initial_admin)
-    application = main_module.create_app(_settings())
+    application = main_module.create_app(configured)
 
     with (
         pytest.raises(RuntimeError, match="initial admin bootstrap failed"),

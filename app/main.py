@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -30,14 +30,19 @@ SESSION_MAX_AGE_SECONDS = 28_800
 _REGISTERED_MODELS = (User, ChatExchange)
 
 
-@asynccontextmanager
-async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
-    """요청을 받기 전에 DB table과 초기 admin 계정을 준비한다."""
+def _create_lifespan(
+    app_settings: Settings,
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    @asynccontextmanager
+    async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
+        """요청을 받기 전에 DB table과 초기 admin 계정을 준비한다."""
 
-    init_db()
-    with SessionLocal() as db:
-        ensure_initial_admin(db=db)
-    yield
+        init_db()
+        with SessionLocal() as db:
+            ensure_initial_admin(db=db, app_settings=app_settings)
+        yield
+
+    return lifespan
 
 
 def create_app(app_settings: Settings | None = None) -> FastAPI:
@@ -47,7 +52,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     session_secret = _require_session_secret(configured)
     _configure_logging(configured.log_level)
 
-    application = FastAPI(lifespan=lifespan)
+    application = FastAPI(lifespan=_create_lifespan(configured))
     application.add_middleware(
         SessionMiddleware,
         secret_key=session_secret,

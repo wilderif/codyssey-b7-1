@@ -21,13 +21,12 @@ from app.core.security import verify_password
 
 
 def test_ensure_initial_admin_creates_hashed_admin_account(
-    monkeypatch: pytest.MonkeyPatch,
     db: Session,
 ) -> None:
     password = "initial-admin-password"
-    _configure_admin(monkeypatch, password=password)
+    app_settings = _admin_settings(password=password)
 
-    ensure_initial_admin(db=db)
+    ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert not db.in_transaction()
     admin = get_user_by_username(db=db, username="admin")
@@ -41,11 +40,11 @@ def test_ensure_initial_admin_is_idempotent(
     monkeypatch: pytest.MonkeyPatch,
     db: Session,
 ) -> None:
-    _configure_admin(monkeypatch, password="initial-admin-password")
+    app_settings = _admin_settings(password="initial-admin-password")
     monkeypatch.setattr(service_module, "hash_password", lambda _password: "test-hash")
 
-    ensure_initial_admin(db=db)
-    ensure_initial_admin(db=db)
+    ensure_initial_admin(db=db, app_settings=app_settings)
+    ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert not db.in_transaction()
     assert db.scalar(select(func.count(User.id))) == 1
@@ -63,14 +62,14 @@ def test_ensure_initial_admin_preserves_existing_admin_without_password(
     )
     admin_id = admin.id
     db.commit()
-    _configure_admin(monkeypatch)
+    app_settings = _admin_settings()
 
     def fail_if_called(_password: str) -> str:
         raise AssertionError("hash_password must not run for an existing admin")
 
     monkeypatch.setattr(service_module, "hash_password", fail_if_called)
 
-    ensure_initial_admin(db=db)
+    ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert not db.in_transaction()
     saved = db.get(User, admin_id)
@@ -81,17 +80,16 @@ def test_ensure_initial_admin_preserves_existing_admin_without_password(
 
 
 def test_ensure_initial_admin_rejects_missing_password(
-    monkeypatch: pytest.MonkeyPatch,
     db: Session,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    _configure_admin(monkeypatch)
+    app_settings = _admin_settings()
 
     with (
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
         pytest.raises(AdminBootstrapError) as captured,
     ):
-        ensure_initial_admin(db=db)
+        ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert captured.value.reason == AdminBootstrapReason.MISSING_INITIAL_PASSWORD
     assert not db.in_transaction()
@@ -103,18 +101,17 @@ def test_ensure_initial_admin_rejects_missing_password(
 
 @pytest.mark.parametrize("password", ["", "short", "x" * 73])
 def test_ensure_initial_admin_rejects_invalid_password_length(
-    monkeypatch: pytest.MonkeyPatch,
     db: Session,
     caplog: pytest.LogCaptureFixture,
     password: str,
 ) -> None:
-    _configure_admin(monkeypatch, password=password)
+    app_settings = _admin_settings(password=password)
 
     with (
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
         pytest.raises(AdminBootstrapError) as captured,
     ):
-        ensure_initial_admin(db=db)
+        ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert captured.value.reason == AdminBootstrapReason.INVALID_INITIAL_PASSWORD
     if password:
@@ -128,7 +125,6 @@ def test_ensure_initial_admin_rejects_invalid_password_length(
 
 
 def test_ensure_initial_admin_rejects_existing_non_admin_account(
-    monkeypatch: pytest.MonkeyPatch,
     db: Session,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -140,13 +136,13 @@ def test_ensure_initial_admin_rejects_existing_non_admin_account(
     )
     user_id = user.id
     db.commit()
-    _configure_admin(monkeypatch, password="initial-admin-password")
+    app_settings = _admin_settings(password="initial-admin-password")
 
     with (
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
         pytest.raises(AdminBootstrapError) as captured,
     ):
-        ensure_initial_admin(db=db)
+        ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert captured.value.reason == AdminBootstrapReason.INVALID_ADMIN_ROLE
     assert not db.in_transaction()
@@ -166,7 +162,7 @@ def test_ensure_initial_admin_contains_lookup_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     sensitive_error = "SELECT password_hash Cookie secret traceback"
-    _configure_admin(monkeypatch, password="initial-admin-password")
+    app_settings = _admin_settings(password="initial-admin-password")
 
     def fail_lookup(**_kwargs: object) -> User | None:
         raise RuntimeError(sensitive_error)
@@ -177,7 +173,7 @@ def test_ensure_initial_admin_contains_lookup_error(
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
         pytest.raises(AdminBootstrapError) as captured,
     ):
-        ensure_initial_admin(db=db)
+        ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert captured.value.reason == AdminBootstrapReason.DB_ERROR
     assert captured.value.__cause__ is None
@@ -193,7 +189,7 @@ def test_ensure_initial_admin_rolls_back_create_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     sensitive_error = "INSERT password_hash database secret"
-    _configure_admin(monkeypatch, password="initial-admin-password")
+    app_settings = _admin_settings(password="initial-admin-password")
     monkeypatch.setattr(service_module, "hash_password", lambda _password: "hash")
 
     def fail_create(**_kwargs: object) -> User:
@@ -205,7 +201,7 @@ def test_ensure_initial_admin_rolls_back_create_error(
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
         pytest.raises(AdminBootstrapError) as captured,
     ):
-        ensure_initial_admin(db=db)
+        ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert captured.value.reason == AdminBootstrapReason.DB_ERROR
     assert sensitive_error not in str(captured.value)
@@ -221,7 +217,7 @@ def test_ensure_initial_admin_rolls_back_commit_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     sensitive_error = "commit failed with password_hash secret"
-    _configure_admin(monkeypatch, password="initial-admin-password")
+    app_settings = _admin_settings(password="initial-admin-password")
     monkeypatch.setattr(service_module, "hash_password", lambda _password: "hash")
 
     def fail_commit() -> None:
@@ -233,7 +229,7 @@ def test_ensure_initial_admin_rolls_back_commit_error(
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
         pytest.raises(AdminBootstrapError) as captured,
     ):
-        ensure_initial_admin(db=db)
+        ensure_initial_admin(db=db, app_settings=app_settings)
 
     assert captured.value.reason == AdminBootstrapReason.DB_ERROR
     assert sensitive_error not in str(captured.value)
@@ -243,15 +239,11 @@ def test_ensure_initial_admin_rolls_back_commit_error(
     _assert_safe_failure_log(caplog, reason=AdminBootstrapReason.DB_ERROR)
 
 
-def _configure_admin(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    password: str | None = None,
-) -> None:
+def _admin_settings(*, password: str | None = None) -> Settings:
     values: dict[str, object] = {"ADMIN_USERNAME": "admin"}
     if password is not None:
         values["ADMIN_INITIAL_PASSWORD"] = password
-    monkeypatch.setattr(service_module, "settings", Settings.model_validate(values))
+    return Settings.model_validate(values)
 
 
 def _assert_safe_failure_log(

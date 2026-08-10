@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.models import ADMIN_ROLE, User
 from app.auth.repository import create_user, get_admin_user, get_user_by_username
-from app.core.config import settings
+from app.core.config import Settings
 from app.core.security import hash_password, verify_password
 
 MIN_USERNAME_LENGTH = 3
@@ -101,7 +101,7 @@ def register_user(*, db: Session, username: str, password: str) -> User:
     return user
 
 
-def ensure_initial_admin(*, db: Session) -> None:
+def ensure_initial_admin(*, db: Session, app_settings: Settings) -> None:
     """초기 admin 계정을 필요할 때 한 번만 생성한다."""
 
     try:
@@ -117,7 +117,7 @@ def ensure_initial_admin(*, db: Session) -> None:
     try:
         bootstrap_username_owner = get_user_by_username(
             db=db,
-            username=settings.admin_username,
+            username=app_settings.admin_username,
         )
     except Exception:  # noqa: BLE001 - startup 경계에서 내부 DB 오류를 숨긴다.
         db.rollback()
@@ -127,7 +127,7 @@ def ensure_initial_admin(*, db: Session) -> None:
         db.rollback()
         _raise_admin_bootstrap_error(AdminBootstrapReason.INVALID_ADMIN_ROLE)
 
-    initial_password = settings.admin_initial_password
+    initial_password = app_settings.admin_initial_password
     if initial_password is None:
         db.rollback()
         _raise_admin_bootstrap_error(AdminBootstrapReason.MISSING_INITIAL_PASSWORD)
@@ -140,7 +140,7 @@ def ensure_initial_admin(*, db: Session) -> None:
     try:
         create_user(
             db=db,
-            username=settings.admin_username,
+            username=app_settings.admin_username,
             password_hash=hash_password(password),
             role=ADMIN_ROLE,
         )

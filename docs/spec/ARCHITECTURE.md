@@ -169,7 +169,7 @@ from app.auth.dependencies import (
 ```python
 def register_user(*, db: Session, username: str, password: str) -> User: ...
 def authenticate_user(*, db: Session, username: str, password: str) -> User | None: ...
-def ensure_initial_admin(*, db: Session) -> None: ...
+def ensure_initial_admin(*, db: Session, app_settings: Settings) -> None: ...
 def set_session_user_id(request: Request, *, user_id: int) -> None: ...
 def get_session_user_id(request: Request) -> int | None: ...
 def clear_session_user_id(request: Request) -> None: ...
@@ -181,7 +181,8 @@ def require_admin(...): ...
   초기 `admin` 계정은 관리자 역할로 생성합니다.
 - `ensure_initial_admin()`은 시작 시 `role=admin` 계정 존재 여부를 확인합니다. username과 관계없이
   관리자 역할 계정이 하나라도 있으면 기존 계정을 변경하지 않고 종료합니다.
-- 관리자 역할 계정이 없으면 실행 설정에서 제공된 초기 관리자 password를 검증·hash하여 username
+- 관리자 역할 계정이 없으면 `create_app()`에서 전달된 실행 설정의 초기 관리자 password를
+  검증·hash하여 username
   `admin`, role `admin`인 초기 계정을 생성합니다. 이때 username `admin`이 일반 사용자 역할로 이미
   존재하면 자동 승격하지 않고 명확한 설정 오류로 시작을 중단합니다.
 - 초기 관리자 생성이 필요한데 password가 누락되었거나 유효하지 않으면 시작을 중단하고 원인을
@@ -241,7 +242,8 @@ from app.auth.dependencies import require_admin
 - Admin Router는 권한 dependency와 Admin Service를 연결해 read-only 운영 metadata를 UI template에
   전달합니다.
 - `app/main.py`는 UI·Chat·Admin router, SessionMiddleware, logging, health, `init_db()`를 연결하고,
-  DB 초기화 후 요청을 받기 전에 `ensure_initial_admin()`을 호출합니다.
+  DB 초기화 후 요청을 받기 전에 `create_app()`이 선택한 실행 설정을 전달하여
+  `ensure_initial_admin()`을 호출합니다.
 - server log는 요청 수신, AI 호출·응답, DB 저장 성공·실패를 application logging으로 남깁니다.
   `/admin/logs`는 server runtime log file을 표시하는 화면이 아닙니다.
 
