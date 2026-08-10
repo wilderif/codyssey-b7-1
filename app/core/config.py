@@ -44,8 +44,10 @@ class Settings(BaseSettings):
         default="INFO",
         validation_alias="LOG_LEVEL",
     )
-    admin_username: Literal["admin"] = Field(
+    admin_username: str = Field(
         default="admin",
+        min_length=3,
+        max_length=30,
         validation_alias="ADMIN_USERNAME",
     )
     admin_initial_password: SecretStr | None = Field(

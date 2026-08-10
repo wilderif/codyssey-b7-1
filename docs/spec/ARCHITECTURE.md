@@ -178,13 +178,12 @@ def require_admin(...): ...
 ```
 
 - `User`는 역할을 저장하는 `role` field를 포함합니다. 일반 회원가입 계정은 일반 사용자,
-  초기 `admin` 계정은 관리자 역할로 생성합니다.
+  초기 관리자 계정은 관리자 역할로 생성합니다.
 - `ensure_initial_admin()`은 시작 시 `role=admin` 계정 존재 여부를 확인합니다. username과 관계없이
   관리자 역할 계정이 하나라도 있으면 기존 계정을 변경하지 않고 종료합니다.
 - 관리자 역할 계정이 없으면 `create_app()`에서 전달된 실행 설정의 초기 관리자 password를
-  검증·hash하여 username
-  `admin`, role `admin`인 초기 계정을 생성합니다. 이때 username `admin`이 일반 사용자 역할로 이미
-  존재하면 자동 승격하지 않고 명확한 설정 오류로 시작을 중단합니다.
+  검증·hash하여 `ADMIN_USERNAME`의 username, role `admin`인 초기 계정을 생성합니다. 이때 설정한
+  username이 일반 사용자 역할로 이미 존재하면 자동 승격하지 않고 명확한 설정 오류로 시작을 중단합니다.
 - 초기 관리자 생성이 필요한데 password가 누락되었거나 유효하지 않으면 시작을 중단하고 원인을
   식별 가능한 log에 남깁니다. 초기 비밀번호 원문은 기록하지 않습니다.
 - Auth는 session에 사용자 ID를 저장·조회·삭제하는 public helper의 mechanics를 소유합니다.
