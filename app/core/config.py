@@ -88,6 +88,9 @@ class Settings(BaseSettings):
             return self
 
         required = {
+            "DATABASE_URL": (
+                self.database_url if "database_url" in self.model_fields_set else None
+            ),
             "SESSION_SECRET": self.session_secret,
             "OPENAI_API_KEY": self.openai_api_key,
             "OPENAI_MODEL": self.openai_model,
