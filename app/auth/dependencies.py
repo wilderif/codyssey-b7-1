@@ -47,11 +47,22 @@ def clear_session_user_id(request: Request) -> None:
     request.session.clear()
 
 
-def get_current_user_id(request: Request) -> int:
+def get_current_user_id(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> int:
     """보호된 JSON route에서 login 사용자의 ID를 반환한다."""
 
     user_id = get_session_user_id(request)
     if user_id is None:
+        clear_session_user_id(request)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="로그인이 필요합니다.",
+        )
+
+    if get_user_by_id(db=db, user_id=user_id) is None:
+        clear_session_user_id(request)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="로그인이 필요합니다.",

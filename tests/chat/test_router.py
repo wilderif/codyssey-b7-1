@@ -17,6 +17,7 @@ import app.chat.i18n as i18n_module
 import app.chat.router as router_module
 from app.auth.dependencies import get_current_user_id
 from app.auth.models import User
+from app.auth.repository import create_user
 from app.chat.errors import (
     AppError,
     ChatGenerationError,
@@ -175,6 +176,57 @@ def test_post_chat_requires_login(client: TestClient) -> None:
         "code": "not_authenticated",
         "detail": "로그인이 필요합니다.",
     }
+
+
+def test_post_chat_rejects_deleted_user_before_processing(
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deleted_user = create_user(
+        db=db,
+        username="deleted-chat-user",
+        password_hash="test-hash",
+    )
+    db.commit()
+    deleted_user_id = deleted_user.id
+    db.delete(deleted_user)
+    db.commit()
+
+    application = FastAPI()
+
+    @application.middleware("http")
+    async def add_deleted_user_session(request, call_next):  # type: ignore[no-untyped-def]
+        request.scope["session"] = {"user_id": deleted_user_id}
+        return await call_next(request)
+
+    application.add_middleware(RequestIdMiddleware)
+    application.include_router(router_module.router)
+    application.add_exception_handler(
+        HTTPException, router_module.http_exception_handler
+    )
+    application.add_exception_handler(AppError, router_module.app_error_handler)
+    application.add_exception_handler(
+        Exception, router_module.unhandled_exception_handler
+    )
+    application.dependency_overrides[get_db] = lambda: db
+    process_calls = 0
+
+    async def fake_process_chat(**_kwargs: object) -> ChatResult:
+        nonlocal process_calls
+        process_calls += 1
+        return ChatResult(1, "answer", datetime(2026, 8, 7, tzinfo=UTC))
+
+    monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
+
+    with TestClient(application, raise_server_exceptions=False) as test_client:
+        response = test_client.post("/api/chat", json={"message": "question"})
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "로그인이 필요합니다.",
+    }
+    assert process_calls == 0
 
 
 @pytest.mark.parametrize(
