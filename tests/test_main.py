@@ -14,6 +14,7 @@ from uuid import UUID
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
     AuthenticatedUser,
@@ -280,6 +281,45 @@ def test_missing_static_asset_returns_404(
 
     assert response.status_code == 404
     assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_server_rendered_auth_flow_uses_session_cookie(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    db: Session,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+    application.dependency_overrides[get_db] = lambda: db
+
+    with TestClient(application) as client:
+        signup_response = client.post(
+            "/signup",
+            data={"username": "flow-user", "password": "password"},
+            follow_redirects=False,
+        )
+        logged_out_chat_response = client.get("/chat", follow_redirects=False)
+        login_response = client.post(
+            "/login",
+            data={"username": "flow-user", "password": "password"},
+            follow_redirects=False,
+        )
+        logged_in_chat_response = client.get("/chat")
+        logout_response = client.post("/logout", follow_redirects=False)
+        post_logout_chat_response = client.get("/chat", follow_redirects=False)
+
+    assert signup_response.status_code == 303
+    assert signup_response.headers["location"] == "/login"
+    assert logged_out_chat_response.status_code == 303
+    assert logged_out_chat_response.headers["location"] == "/login"
+    assert login_response.status_code == 303
+    assert login_response.headers["location"] == "/chat"
+    assert logged_in_chat_response.status_code == 200
+    assert "아직 대화 기록이 없습니다." in logged_in_chat_response.text
+    assert logout_response.status_code == 303
+    assert logout_response.headers["location"] == "/login"
+    assert post_logout_chat_response.status_code == 303
+    assert post_logout_chat_response.headers["location"] == "/login"
 
 
 def test_unhandled_api_error_preserves_request_id_on_500_response(
