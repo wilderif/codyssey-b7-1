@@ -293,6 +293,31 @@ def test_unhandled_api_error_preserves_request_id_on_500_response(
         response = client.get("/api/_test/unhandled-error")
 
     assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_error",
+        "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    }
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_unhandled_html_error_returns_safe_response_with_request_id(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    @application.get("/_test/unhandled-html-error")
+    def raise_unhandled_html_error() -> None:
+        raise RuntimeError("SELECT password_hash FROM users")
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/_test/unhandled-html-error")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert "password_hash" not in response.text
     assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
