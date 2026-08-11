@@ -1,0 +1,50 @@
+<main id="main-content" class="page-shell">
+  <section class="auth-card" aria-labelledby="{{ auth_form.name }}-heading">
+    <header class="auth-card__header">
+      <p class="auth-card__eyebrow">Codyssey</p>
+      <h1 id="{{ auth_form.name }}-heading">{{ auth_form.heading }}</h1>
+      <p class="auth-card__description">{{ auth_form.description }}</p>
+    </header>
+
+    <form class="auth-form" method="post" action="/{{ auth_form.name }}">
+      {% if error %}
+      <p id="{{ auth_form.name }}-error" class="form-error" role="alert">{{ error }}</p>
+      {% endif %}
+
+      <div class="form-field">
+        <label for="{{ auth_form.name }}-username">아이디</label>
+        <input
+          id="{{ auth_form.name }}-username"
+          name="username"
+          type="text"
+          value="{{ username }}"
+          required
+          {% if auth_form.username_minlength %}minlength="{{ auth_form.username_minlength }}"{% endif %}
+          maxlength="30"
+          autocomplete="username"
+          {% if error %}aria-describedby="{{ auth_form.name }}-error"{% endif %}
+        >
+      </div>
+
+      <div class="form-field">
+        <label for="{{ auth_form.name }}-password">비밀번호</label>
+        <input
+          id="{{ auth_form.name }}-password"
+          name="password"
+          type="password"
+          required
+          {% if auth_form.password_minlength %}minlength="{{ auth_form.password_minlength }}"{% endif %}
+          maxlength="72"
+          autocomplete="{{ auth_form.password_autocomplete }}"
+          {% if error %}aria-describedby="{{ auth_form.name }}-error"{% endif %}
+        >
+      </div>
+
+      <button type="submit">{{ auth_form.submit_label }}</button>
+    </form>
+
+    <p class="auth-card__alternative">
+      {{ auth_form.alternative_text }} <a href="{{ auth_form.alternative_href }}">{{ auth_form.alternative_label }}</a>
+    </p>
+  </section>
+</main>

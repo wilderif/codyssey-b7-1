@@ -3,52 +3,17 @@
 {% block page_title %}Login | Codyssey{% endblock %}
 
 {% block content %}
-<main id="main-content" class="page-shell">
-  <section class="auth-card" aria-labelledby="login-heading">
-    <header class="auth-card__header">
-      <p class="auth-card__eyebrow">Codyssey</p>
-      <h1 id="login-heading">Login</h1>
-      <p class="auth-card__description">계정에 Login하고 대화를 이어가세요.</p>
-    </header>
-
-    <form class="auth-form" method="post" action="/login">
-      {% if error %}
-      <p id="login-error" class="form-error" role="alert">{{ error }}</p>
-      {% endif %}
-
-      <div class="form-field">
-        <label for="login-username">아이디</label>
-        <input
-          id="login-username"
-          name="username"
-          type="text"
-          value="{{ username }}"
-          required
-          maxlength="30"
-          autocomplete="username"
-          {% if error %}aria-describedby="login-error"{% endif %}
-        >
-      </div>
-
-      <div class="form-field">
-        <label for="login-password">비밀번호</label>
-        <input
-          id="login-password"
-          name="password"
-          type="password"
-          required
-          maxlength="72"
-          autocomplete="current-password"
-          {% if error %}aria-describedby="login-error"{% endif %}
-        >
-      </div>
-
-      <button type="submit">Login</button>
-    </form>
-
-    <p class="auth-card__alternative">
-      계정이 없나요? <a href="/signup">회원가입</a>
-    </p>
-  </section>
-</main>
+{% set auth_form = {
+  "name": "login",
+  "heading": "Login",
+  "description": "계정에 Login하고 대화를 이어가세요.",
+  "username_minlength": none,
+  "password_minlength": none,
+  "password_autocomplete": "current-password",
+  "submit_label": "Login",
+  "alternative_text": "계정이 없나요?",
+  "alternative_href": "/signup",
+  "alternative_label": "회원가입"
+} %}
+{% include "_auth_form.html" %}
 {% endblock %}
