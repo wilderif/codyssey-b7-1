@@ -110,6 +110,7 @@ def test_health_initializes_registered_models_before_serving_requests(
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
     assert len(initialized_tables) == 1
     assert {"users", "chat_exchanges"} <= initialized_tables[0]
     assert startup_events == [
@@ -217,6 +218,64 @@ def test_create_app_sets_configured_logging_level(main_module: ModuleType) -> No
     main_module.create_app(_settings(log_level="WARNING"))
 
     assert logging.getLogger().level == logging.WARNING
+
+
+def test_create_app_registers_ui_router_once(main_module: ModuleType) -> None:
+    application = main_module.create_app(_settings())
+
+    matching_routes = [
+        route
+        for route in application.routes
+        if getattr(route, "original_router", None) is main_module.ui_router
+    ]
+
+    assert len(matching_routes) == 1
+
+
+def test_create_app_mounts_static_files_once(main_module: ModuleType) -> None:
+    application = main_module.create_app(_settings())
+
+    matching_routes = [
+        route
+        for route in application.routes
+        if getattr(route, "path", None) == "/static"
+    ]
+
+    assert len(matching_routes) == 1
+    assert matching_routes[0].name == "static"
+
+
+def test_static_assets_are_public_and_have_expected_content_types(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    with TestClient(application) as client:
+        stylesheet_response = client.get("/static/styles.css")
+        script_response = client.get("/static/chat.js")
+
+    assert stylesheet_response.status_code == 200
+    assert stylesheet_response.headers["content-type"].startswith("text/css")
+    assert UUID(stylesheet_response.headers[REQUEST_ID_HEADER]).version == 4
+    assert script_response.status_code == 200
+    assert script_response.headers["content-type"].startswith("text/javascript")
+    assert UUID(script_response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_missing_static_asset_returns_404(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    with TestClient(application) as client:
+        response = client.get("/static/missing.css")
+
+    assert response.status_code == 404
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
 def test_unhandled_api_error_preserves_request_id_on_500_response(

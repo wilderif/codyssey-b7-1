@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.staticfiles import StaticFiles
 
 from app.admin.router import router as admin_router
 from app.auth.models import User
@@ -25,9 +27,11 @@ from app.chat.router import router as chat_router
 from app.core.config import Settings, settings
 from app.core.database import SessionLocal, init_db
 from app.core.request_id import RequestIdMiddleware
+from app.ui.router import router as ui_router
 
 SESSION_MAX_AGE_SECONDS = 28_800
 _REGISTERED_MODELS = (User, ChatExchange)
+_STATIC_DIRECTORY = Path(__file__).resolve().parent / "ui" / "static"
 
 
 def _create_lifespan(
@@ -64,6 +68,12 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
 
     application.include_router(admin_router)
     application.include_router(chat_router)
+    application.include_router(ui_router)
+    application.mount(
+        "/static",
+        StaticFiles(directory=_STATIC_DIRECTORY),
+        name="static",
+    )
     application.add_exception_handler(
         RequestValidationError,
         validation_exception_handler,
