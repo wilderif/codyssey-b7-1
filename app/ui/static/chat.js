@@ -122,7 +122,7 @@
 
   // Reflect the raw textarea length without repeatedly announcing every keypress.
   function updateCharacterCount() {
-    characterCount.value = `${messageInput.value.length} / ${MAX_MESSAGE_LENGTH}`;
+    characterCount.textContent = `${messageInput.value.length} / ${MAX_MESSAGE_LENGTH}`;
   }
 
   // Return one normalized question or report its client-side validation error.

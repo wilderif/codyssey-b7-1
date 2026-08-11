@@ -213,7 +213,7 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
     label = _find_tag(collector, "label", "for", "chat-message")
     textarea = _find_tag(collector, "textarea", "id", "chat-message")
     help_text = _find_tag(collector, "p", "id", "chat-input-help")
-    character_count = _find_tag(collector, "output", "id", "chat-character-count")
+    character_count = _find_tag(collector, "span", "id", "chat-character-count")
     error = _find_tag(collector, "p", "id", "chat-form-error")
     submit = _find_tag(collector, "button", "id", "chat-submit")
     pending_template = _find_tag(collector, "template", "id", "chat-pending-template")
@@ -232,7 +232,7 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
     )
     assert "required" in textarea
     assert help_text is not None
-    assert character_count["for"] == "chat-message"
+    assert "role" not in character_count
     assert "aria-live" not in character_count
     assert "Enter로 전송 · Shift+Enter로 줄바꿈" in html
     assert "0 / 1000" in html
@@ -342,6 +342,7 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         "form.requestSubmit(submitButton)",
         'messageInput.addEventListener("input"',
         'messageInput.addEventListener("keydown"',
+        "characterCount.textContent =",
     ):
         assert input_contract in script
 
