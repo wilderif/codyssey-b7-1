@@ -260,6 +260,7 @@ def test_static_assets_are_public_and_have_expected_content_types(
     with TestClient(application) as client:
         stylesheet_response = client.get("/static/styles.css")
         script_response = client.get("/static/chat.js")
+        favicon_response = client.get("/static/favicon.svg")
 
     assert stylesheet_response.status_code == 200
     assert stylesheet_response.headers["content-type"].startswith("text/css")
@@ -267,6 +268,9 @@ def test_static_assets_are_public_and_have_expected_content_types(
     assert script_response.status_code == 200
     assert script_response.headers["content-type"].startswith("text/javascript")
     assert UUID(script_response.headers[REQUEST_ID_HEADER]).version == 4
+    assert favicon_response.status_code == 200
+    assert favicon_response.headers["content-type"].startswith("image/svg+xml")
+    assert UUID(favicon_response.headers[REQUEST_ID_HEADER]).version == 4
 
 
 def test_missing_static_asset_returns_404(

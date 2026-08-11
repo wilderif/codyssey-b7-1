@@ -60,7 +60,7 @@ def _metadata_item(
         created_at=datetime(2026, 8, 9, 10, 30, tzinfo=UTC),
         request_id="request-34",
         user_agent=user_agent,
-        response_time_ms=56,
+        response_time_ms=5819,
         status="failed",
         error_code="openai_timeout",
     )
@@ -123,7 +123,7 @@ def test_admin_logs_renders_safe_metadata_for_admin(
         'datetime="2026-08-09T10:30:00+00:00"',
         "2026-08-09 10:30:00 UTC",
         "request-34",
-        "56",
+        "5,819 ms",
         "failed",
         "openai_timeout",
         "&lt;script&gt;alert(&#34;username&#34;)&lt;/script&gt;",
@@ -214,6 +214,10 @@ def test_admin_logs_renders_shared_layout_and_navigation(
 
     assert response.status_code == 200
     assert '<link rel="stylesheet" href="/static/styles.css">' in response.text
+    assert (
+        '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">'
+        in response.text
+    )
     assert '<a class="skip-link" href="#main-content">' in response.text
     assert '<a class="protected-nav__link" href="/chat">' in response.text
     assert '<form class="protected-nav__logout" method="post" action="/logout">' in (

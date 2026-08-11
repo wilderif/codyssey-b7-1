@@ -64,7 +64,9 @@
           <td class="admin-table__cell--user-agent">
             {{ item.user_agent if item.user_agent is not none else "-" }}
           </td>
-          <td class="admin-table__cell--compact">{{ item.response_time_ms }}</td>
+          <td class="admin-table__cell--compact">
+            {{ "{:,} ms".format(item.response_time_ms) }}
+          </td>
           <td class="admin-table__cell--compact">{{ item.status }}</td>
           <td class="admin-table__cell--compact">
             {{ item.error_code if item.error_code is not none else "-" }}
