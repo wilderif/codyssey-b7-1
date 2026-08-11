@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -12,8 +13,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.auth.models import ADMIN_ROLE, USER_ROLE
 from app.auth.repository import create_user
 from app.auth.service import RegistrationError, RegistrationReason
+from app.chat.service import ChatExchangeHistoryItem
 from app.core.database import get_db
 
 
@@ -326,3 +329,162 @@ def test_logout_is_not_available_with_get(client: TestClient) -> None:
     response = client.get("/logout")
 
     assert response.status_code == 405
+
+
+def test_chat_passes_service_history_in_latest_first_order_and_exact_context(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.ui import router as router_module
+
+    user = create_user(db=db, username="chat-user", password_hash="test-hash")
+    db.commit()
+    _set_session(app, {"user_id": user.id})
+    history = [
+        ChatExchangeHistoryItem(
+            chat_exchange_id=2,
+            question="latest-question",
+            answer="latest-answer",
+            status="success",
+            created_at=datetime(2026, 8, 11, 2, tzinfo=UTC),
+        ),
+        ChatExchangeHistoryItem(
+            chat_exchange_id=1,
+            question="older-question",
+            answer="older-answer",
+            status="success",
+            created_at=datetime(2026, 8, 11, 1, tzinfo=UTC),
+        ),
+    ]
+    received: dict[str, object] = {}
+    captured_context: dict[str, object] = {}
+
+    def fake_list_chat_exchange_history(**kwargs: object) -> object:
+        received.update(kwargs)
+        return history
+
+    class CapturingTemplates:
+        def TemplateResponse(
+            self,
+            request: object,
+            name: str,
+            context: dict[str, object],
+        ) -> Response:
+            assert request is not None
+            assert name == "chat.html"
+            captured_context.update(context)
+            return HTMLResponse("rendered")
+
+    monkeypatch.setattr(
+        router_module,
+        "list_chat_exchange_history",
+        fake_list_chat_exchange_history,
+    )
+    monkeypatch.setattr(router_module, "templates", CapturingTemplates())
+
+    response = client.get("/chat")
+
+    assert response.status_code == 200
+    assert received == {"user_id": user.id, "db": db}
+    assert captured_context == {
+        "chat_exchanges": history,
+        "is_admin": False,
+    }
+    assert captured_context["chat_exchanges"] is history
+
+
+@pytest.mark.parametrize(
+    ("role", "expected_admin_navigation"),
+    [(USER_ROLE, False), (ADMIN_ROLE, True)],
+)
+def test_chat_renders_admin_navigation_only_for_admin(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+    expected_admin_navigation: bool,
+) -> None:
+    from app.ui import router as router_module
+
+    user = create_user(
+        db=db,
+        username=f"{role}-chat-user",
+        password_hash="test-hash",
+        role=role,
+    )
+    db.commit()
+    _set_session(app, {"user_id": user.id})
+    monkeypatch.setattr(
+        router_module,
+        "list_chat_exchange_history",
+        lambda **_kwargs: [],
+    )
+
+    response = client.get("/chat")
+
+    assert response.status_code == 200
+    assert ('href="/admin/logs"' in response.text) is expected_admin_navigation
+    assert 'method="post" action="/logout"' in response.text
+
+
+@pytest.mark.parametrize(
+    "session",
+    [{}, {"user_id": "1"}, {"user_id": 999, "stale": "value"}],
+)
+def test_chat_clears_invalid_session_without_reading_history(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    session: dict[str, object],
+) -> None:
+    from app.ui import router as router_module
+
+    def fail_if_called(**_kwargs: object) -> object:
+        raise AssertionError("history must not be read without an authenticated user")
+
+    monkeypatch.setattr(
+        router_module,
+        "list_chat_exchange_history",
+        fail_if_called,
+    )
+    _set_session(app, session)
+
+    response = client.get("/chat", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+    assert app.state.session == {}
+
+
+def test_chat_allows_history_failure_to_reach_global_exception_handling(
+    app: FastAPI,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.ui import router as router_module
+
+    user = create_user(
+        db=db,
+        username="failing-chat-user",
+        password_hash="test-hash",
+    )
+    db.commit()
+    _set_session(app, {"user_id": user.id})
+
+    def raise_history_failure(**_kwargs: object) -> object:
+        raise RuntimeError("history read failed")
+
+    monkeypatch.setattr(
+        router_module,
+        "list_chat_exchange_history",
+        raise_history_failure,
+    )
+
+    with (
+        TestClient(app) as raising_client,
+        pytest.raises(RuntimeError, match="history read failed"),
+    ):
+        raising_client.get("/chat")

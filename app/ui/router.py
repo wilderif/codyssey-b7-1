@@ -22,6 +22,7 @@ from app.auth.service import (
     authenticate_user,
     register_user,
 )
+from app.chat.service import list_chat_exchange_history
 from app.core.database import get_db
 
 router = APIRouter()
@@ -133,6 +134,31 @@ def post_logout(request: Request) -> RedirectResponse:
 
     clear_session_user_id(request)
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/chat", response_class=HTMLResponse)
+def get_chat(
+    request: Request,
+    authenticated_user: Annotated[
+        AuthenticatedUser,
+        Depends(require_authenticated_user),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    """로그인 사용자의 이전 대화와 Chat 입력 화면을 제공한다."""
+
+    chat_exchanges = list_chat_exchange_history(
+        user_id=authenticated_user.user_id,
+        db=db,
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="chat.html",
+        context={
+            "chat_exchanges": chat_exchanges,
+            "is_admin": authenticated_user.is_admin,
+        },
+    )
 
 
 def _render_auth_template(
