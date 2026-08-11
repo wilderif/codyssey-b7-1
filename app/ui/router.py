@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
     AuthenticatedUser,
     clear_session_user_id,
+    get_optional_authenticated_user,
     require_authenticated_user,
     set_session_user_id,
 )
@@ -24,6 +23,8 @@ from app.auth.service import (
 )
 from app.chat.service import list_chat_exchange_history
 from app.core.database import get_db
+from app.ui.responses import prevent_browser_caching
+from app.ui.templating import templates
 
 # Map registration failures to safe, user-facing messages.
 _REGISTRATION_ERROR_MESSAGES = {
@@ -34,9 +35,7 @@ _REGISTRATION_ERROR_MESSAGES = {
 # Avoid revealing which login credential was invalid.
 _LOGIN_ERROR_MESSAGE = "아이디 또는 비밀번호가 올바르지 않습니다."
 
-# Configure the routes and shared Jinja template loader for UI responses.
 router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 @router.get("/", dependencies=[Depends(require_authenticated_user)])
@@ -47,9 +46,17 @@ def get_root() -> RedirectResponse:
 
 
 @router.get("/signup", response_class=HTMLResponse)
-def get_signup(request: Request) -> Response:
+def get_signup(
+    request: Request,
+    authenticated_user: Annotated[
+        AuthenticatedUser | None,
+        Depends(get_optional_authenticated_user),
+    ],
+) -> Response:
     """Render an empty signup form."""
 
+    if authenticated_user is not None:
+        return _redirect_to("/chat")
     return _render_auth_template(request, "signup.html")
 
 
@@ -83,9 +90,17 @@ def post_signup(
 
 
 @router.get("/login", response_class=HTMLResponse)
-def get_login(request: Request) -> Response:
+def get_login(
+    request: Request,
+    authenticated_user: Annotated[
+        AuthenticatedUser | None,
+        Depends(get_optional_authenticated_user),
+    ],
+) -> Response:
     """Render an empty login form."""
 
+    if authenticated_user is not None:
+        return _redirect_to("/chat")
     return _render_auth_template(request, "login.html")
 
 
@@ -141,13 +156,15 @@ def get_chat(
         user_id=authenticated_user.user_id,
         db=db,
     )
-    return templates.TemplateResponse(
-        request=request,
-        name="chat.html",
-        context={
-            "chat_exchanges": chat_exchanges,
-            "is_admin": authenticated_user.is_admin,
-        },
+    return prevent_browser_caching(
+        templates.TemplateResponse(
+            request=request,
+            name="chat.html",
+            context={
+                "chat_exchanges": chat_exchanges,
+                "is_admin": authenticated_user.is_admin,
+            },
+        )
     )
 
 
@@ -161,15 +178,19 @@ def _render_auth_template(
 ) -> Response:
     """Render an authentication form with its safe display context."""
 
-    return templates.TemplateResponse(
-        request=request,
-        name=template_name,
-        context={"error": error, "username": username},
-        status_code=status_code,
+    return prevent_browser_caching(
+        templates.TemplateResponse(
+            request=request,
+            name=template_name,
+            context={"error": error, "username": username},
+            status_code=status_code,
+        )
     )
 
 
 def _redirect_to(path: str) -> RedirectResponse:
     """Build the shared HTTP 303 redirect response."""
 
-    return RedirectResponse(url=path, status_code=status.HTTP_303_SEE_OTHER)
+    return prevent_browser_caching(
+        RedirectResponse(url=path, status_code=status.HTTP_303_SEE_OTHER)
+    )

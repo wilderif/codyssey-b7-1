@@ -14,7 +14,7 @@
 | Cookie | `HttpOnly=true`, `SameSite=Lax`, 배포 환경 `Secure=true` |
 | Request ID | server가 request마다 생성하고 `X-Request-ID` response header로 반환. client 제공 값은 재사용하지 않음 |
 | 관리자 | `users.role`로 판별. 초기 관리자 bootstrap은 [Architecture](../ARCHITECTURE.md)의 Auth 계약을 따름 |
-| 시간 | DB는 UTC, API는 UTC ISO 8601(`Z`) 사용 |
+| 시간 | DB와 API는 UTC ISO 8601(`Z`) 사용. HTML의 사용자 표시만 UI 계약에 따라 KST로 변환 |
 | 내부정보 | SQL 오류, 전체 stack, key, cookie, 내부 `error_message`를 API·화면에 노출하지 않음 |
 
 ## 2. HTML·폼 경로
@@ -25,9 +25,9 @@
 | Method | 경로 | 성공 | 실패·비로그인 | 설명 |
 | --- | --- | --- | --- | --- |
 | `GET` | `/` | 유효한 로그인 `303 /chat` · 비로그인·stale session `303 /login` | 해당 없음 | 메인화면 |
-| `GET` | `/signup` | `200 signup.html` | 해당 없음 | 회원가입화면 |
+| `GET` | `/signup` | 비로그인 `200 signup.html` · 유효한 로그인 `303 /chat` | 해당 없음 | 회원가입화면 |
 | `POST` | `/signup` | 자동 로그인 없이 `303 /login` | 동일 화면 `400` | 회원가입 처리 |
-| `GET` | `/login` | `200 login.html` | 해당 없음 | 로그인화면 |
+| `GET` | `/login` | 비로그인 `200 login.html` · 유효한 로그인 `303 /chat` | 해당 없음 | 로그인화면 |
 | `POST` | `/login` | 세션 생성 후 `303 /chat` | 동일 화면 `400` | 로그인 처리 |
 | `POST` | `/logout` | 세션 삭제 후 `303 /login` | 비로그인도 `303 /login` | 로그아웃 처리 |
 | `GET` | `/chat` | 본인 이전 대화와 입력창을 포함한 `200 chat.html` | 비로그인·stale session `303 /login` | 채팅·사용자 대화 로그 화면 |
@@ -35,6 +35,8 @@
 | `GET` | `/static/{path}` | 존재하는 CSS·JavaScript asset `200` | 없는 asset `404` | 인증이 필요 없는 UI static asset |
 
 - form 성공 후 이동은 모두 `303 See Other`를 사용합니다.
+- 인증 form·보호 HTML response와 session을 변경하는 redirect는 `Cache-Control: no-store`를 사용합니다.
+  BFCache 복원 시 UI는 page를 reload하여 server가 현재 session을 다시 확인하게 합니다.
 - `username`: 앞뒤 공백 제거 후 Python 문자열 길이 3~30자, `password`: 공백을 제거하지 않은 입력값의
   Python 문자열 길이 8~72자입니다.
 - 중복 username·길이 오류는 사용자용 message와 함께 동일 화면을 `400`으로 다시 렌더링합니다.
@@ -55,9 +57,9 @@
 - 회원가입·Login에서 field가 누락되거나 빈 값이면 동일한 입력 오류 정책으로 처리하며 framework의
   기본 `422` JSON body를 Browser에 노출하지 않습니다.
 - Password는 trim하거나 template context, HTML value, log, URL에 전달하지 않습니다.
-- `signup.html`과 `login.html`의 context는 `error: str | None`, `username: str`을 포함합니다. 최초
-  `GET`은 각각 `error=None`, `username=""`이며 실패한 `POST`는 normalized username과 안전한 오류
-  message만 다시 전달합니다.
+- `signup.html`과 `login.html`의 context는 `error: str | None`, `username: str`을 포함합니다. 비로그인
+  최초 `GET`은 각각 `error=None`, `username=""`이며 실패한 `POST`는 normalized username과 안전한
+  오류 message만 다시 전달합니다. 유효한 login session의 `GET`은 template을 rendering하지 않습니다.
 - `RegistrationError.reason`은 다음처럼 `signup.html`의 `error`로 변환합니다.
 
 | `RegistrationReason` | `error` |

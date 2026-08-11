@@ -21,10 +21,17 @@
   const MAX_MESSAGE_LENGTH = 1000;
   // Primary-pointer query that keeps virtual keyboards multiline-friendly.
   const COARSE_POINTER_QUERY = "(pointer: coarse)";
-  // Keyboard guidance for devices with a precise primary pointer.
-  const DESKTOP_INPUT_HELP = "Enter로 전송 · Shift+Enter로 줄바꿈";
-  // Keyboard guidance for touch-first devices without a practical Shift key.
-  const MOBILE_INPUT_HELP = "Enter로 줄바꿈 · 전송 버튼으로 보내기";
+  // Fixed display timezone independent from the Browser's local timezone.
+  const KST_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
 
   // Form that owns the Chat submission flow.
   const form = document.getElementById("chat-form");
@@ -34,8 +41,6 @@
   const submitButton = document.getElementById("chat-submit");
   // Accessible container for client-side form errors.
   const formError = document.getElementById("chat-form-error");
-  // Persistent keyboard guidance associated with the question control.
-  const messageHelp = document.getElementById("chat-input-help");
   // Visible count associated with the question control without live announcements.
   const characterCount = document.getElementById("chat-character-count");
   // Timeline that receives pending and completed exchanges.
@@ -49,7 +54,6 @@
     !messageInput ||
     !submitButton ||
     !formError ||
-    !messageHelp ||
     !characterCount ||
     !history ||
     !pendingTemplate
@@ -65,6 +69,16 @@
   // Narrow an unknown JSON value to a plain object-like payload.
   function isObject(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  // Format one instant for display in the fixed Korea Standard Time zone.
+  function formatKstTimestamp(value) {
+    const parts = Object.fromEntries(
+      KST_DATE_TIME_FORMATTER.formatToParts(value)
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value]),
+    );
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
   }
 
   // Validate and normalize the success payload used by the renderer.
@@ -90,7 +104,7 @@
       chatExchangeId: payload.chat_exchange_id,
       answer: payload.answer,
       createdAt: payload.created_at,
-      createdAtText: `${createdAt.toISOString().slice(0, 19).replace("T", " ")} UTC`,
+      createdAtText: formatKstTimestamp(createdAt),
     };
   }
 
@@ -111,13 +125,6 @@
   function setFormError(message = "") {
     formError.textContent = message;
     formError.hidden = message.length === 0;
-  }
-
-  // Keep the concise keyboard guidance aligned with the active input mode.
-  function updateInputHelp() {
-    messageHelp.textContent = coarsePointer.matches
-      ? MOBILE_INPUT_HELP
-      : DESKTOP_INPUT_HELP;
   }
 
   // Reflect the raw textarea length without repeatedly announcing every keypress.
@@ -313,8 +320,6 @@
   form.addEventListener("submit", handleSubmit);
   messageInput.addEventListener("input", updateCharacterCount);
   messageInput.addEventListener("keydown", handleMessageKeydown);
-  coarsePointer.addEventListener("change", updateInputHelp);
-  updateInputHelp();
   updateCharacterCount();
   scrollHistoryToLatest();
 })();

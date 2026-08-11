@@ -82,6 +82,7 @@ def test_root_redirects_authenticated_user_to_chat(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/chat"
+    assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.parametrize("session", [{}, {"user_id": 999, "stale": "value"}])
@@ -96,6 +97,7 @@ def test_root_redirects_invalid_session_to_login_and_clears_it(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+    assert response.headers["cache-control"] == "no-store"
     assert app.state.session == {}
 
 
@@ -116,10 +118,56 @@ def test_get_auth_form_passes_empty_context(
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
     assert templates.request is not None
     assert templates.name == template_name
     assert templates.context == {"error": None, "username": ""}
     assert templates.status_code == 200
+
+
+@pytest.mark.parametrize("path", ["/signup", "/login"])
+def test_get_auth_form_redirects_authenticated_user_to_chat(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    path: str,
+) -> None:
+    user = create_user(
+        db=db,
+        username=f"redirect-{path[1:]}-user",
+        password_hash="test-hash",
+    )
+    db.commit()
+    _set_session(app, {"user_id": user.id})
+
+    response = client.get(path, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/chat"
+    assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    ("path", "template_name"),
+    [("/signup", "signup.html"), ("/login", "login.html")],
+)
+def test_get_auth_form_clears_stale_session_and_renders_form(
+    app: FastAPI,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    template_name: str,
+) -> None:
+    templates = CapturingTemplates()
+    monkeypatch.setattr(router_module, "templates", templates)
+    _set_session(app, {"user_id": 999, "stale": "value"})
+
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert templates.name == template_name
+    assert app.state.session == {}
 
 
 def test_signup_normalizes_username_without_changing_password(
@@ -144,6 +192,7 @@ def test_signup_normalizes_username_without_changing_password(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+    assert response.headers["cache-control"] == "no-store"
     assert received == {
         "db": db,
         "username": "new-user",
@@ -248,6 +297,7 @@ def test_login_sets_session_and_preserves_password_whitespace(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/chat"
+    assert response.headers["cache-control"] == "no-store"
     assert received == {
         "db": db,
         "username": "login-user",
@@ -322,6 +372,7 @@ def test_logout_clears_any_session_and_redirects_to_login(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+    assert response.headers["cache-control"] == "no-store"
     assert app.state.session == {}
 
 
@@ -373,6 +424,7 @@ def test_chat_passes_service_history_in_latest_first_order_and_exact_context(
     response = client.get("/chat")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     assert received == {"user_id": user.id, "db": db}
     assert templates.request is not None
     assert templates.name == "chat.html"

@@ -114,11 +114,12 @@ def test_admin_logs_renders_safe_metadata_for_admin(
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
     for value in (
         "12",
         "34",
         'datetime="2026-08-09T10:30:00+00:00"',
-        "2026-08-09 10:30:00 UTC",
+        "2026-08-09 19:30:00 KST",
         "request-34",
         "5,819 ms",
         "failed",
@@ -156,6 +157,7 @@ def test_admin_logs_renders_semantic_table_contract(
     assert 'class="admin-table-container"' in response.text
     assert 'role="region"' in response.text
     assert 'aria-labelledby="admin-table-caption"' in response.text
+    assert 'aria-describedby="admin-table-scroll-hint"' in response.text
     assert 'tabindex="0"' in response.text
     assert '<caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>' in (
         response.text
@@ -188,6 +190,7 @@ def test_admin_logs_renders_shared_layout_and_navigation(
     response = admin_client.get("/admin/logs")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     assert '<link rel="stylesheet" href="/static/styles.css">' in response.text
     assert (
         '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">'
@@ -304,6 +307,7 @@ def test_admin_logs_returns_safe_html_error_for_admin_read_error(
 
     assert response.status_code == 500
     assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
     assert response.text == "서버 오류가 발생했습니다."
     assert sensitive_error not in response.text
 

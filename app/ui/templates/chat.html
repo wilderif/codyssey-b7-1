@@ -55,7 +55,7 @@
               class="chat-message__time"
               datetime="{{ exchange.created_at.isoformat() }}"
               data-chat-time
-            >{{ exchange.created_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC</time>
+            >{{ exchange.created_at | kst_datetime }}</time>
           </div>
         </article>
         {% endfor %}
@@ -74,16 +74,13 @@
           <textarea
             id="chat-message"
             name="message"
-            rows="4"
+            rows="2"
             maxlength="1000"
             required
-            aria-describedby="chat-input-help chat-character-count chat-form-error"
+            aria-describedby="chat-character-count chat-form-error"
           ></textarea>
 
           <div class="chat-form__meta">
-            <p id="chat-input-help" class="chat-form__help">
-              Enter로 전송 · Shift+Enter로 줄바꿈
-            </p>
             <span
               id="chat-character-count"
               class="chat-form__counter"
