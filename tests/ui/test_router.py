@@ -218,8 +218,38 @@ def test_signup_maps_registration_error_to_safe_template_context(
             "아이디는 3자 이상 30자 이하로 입력해주세요.",
         ),
         (
+            "/signup",
+            {"username": "valid-user"},
+            "비밀번호는 8자 이상 72자 이하로 입력해주세요.",
+        ),
+        (
+            "/signup",
+            {"password": "password"},
+            "아이디는 3자 이상 30자 이하로 입력해주세요.",
+        ),
+        (
+            "/signup",
+            {"username": "", "password": ""},
+            "아이디는 3자 이상 30자 이하로 입력해주세요.",
+        ),
+        (
             "/login",
             {},
+            "아이디 또는 비밀번호가 올바르지 않습니다.",
+        ),
+        (
+            "/login",
+            {"username": "valid-user"},
+            "아이디 또는 비밀번호가 올바르지 않습니다.",
+        ),
+        (
+            "/login",
+            {"password": "password"},
+            "아이디 또는 비밀번호가 올바르지 않습니다.",
+        ),
+        (
+            "/login",
+            {"username": "", "password": ""},
             "아이디 또는 비밀번호가 올바르지 않습니다.",
         ),
     ],
@@ -236,6 +266,50 @@ def test_missing_form_fields_return_html_input_error_instead_of_json_422(
     assert response.headers["content-type"].startswith("text/html")
     assert expected_message in response.text
     assert response.text.lstrip().startswith("<!doctype html>")
+
+
+@pytest.mark.parametrize(
+    ("username_length", "expected_status"),
+    [(2, 400), (3, 303), (30, 303), (31, 400)],
+)
+def test_signup_enforces_username_length_boundaries(
+    client: TestClient,
+    username_length: int,
+    expected_status: int,
+) -> None:
+    response = client.post(
+        "/signup",
+        data={"username": "u" * username_length, "password": "password"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == expected_status
+    if expected_status == 303:
+        assert response.headers["location"] == "/login"
+    else:
+        assert "아이디는 3자 이상 30자 이하로 입력해주세요." in response.text
+
+
+@pytest.mark.parametrize(
+    ("password_length", "expected_status"),
+    [(7, 400), (8, 303), (72, 303), (73, 400)],
+)
+def test_signup_enforces_password_length_boundaries(
+    client: TestClient,
+    password_length: int,
+    expected_status: int,
+) -> None:
+    response = client.post(
+        "/signup",
+        data={"username": "boundary-user", "password": "p" * password_length},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == expected_status
+    if expected_status == 303:
+        assert response.headers["location"] == "/login"
+    else:
+        assert "비밀번호는 8자 이상 72자 이하로 입력해주세요." in response.text
 
 
 def test_login_sets_session_and_preserves_password_whitespace(

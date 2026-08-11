@@ -15,10 +15,14 @@ import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
-from app.auth.dependencies import get_current_user_id
+from app.auth.dependencies import (
+    AuthenticatedUser,
+    get_current_user_id,
+    require_authenticated_user,
+)
 from app.core import config as config_module
 from app.core.config import Settings
-from app.core.database import Base
+from app.core.database import Base, get_db
 from app.core.request_id import REQUEST_ID_HEADER
 
 
@@ -318,6 +322,41 @@ def test_unhandled_html_error_returns_safe_response_with_request_id(
     assert response.headers["content-type"].startswith("text/html")
     assert response.text == "서버 오류가 발생했습니다."
     assert "password_hash" not in response.text
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_chat_history_failure_uses_safe_html_error_boundary(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.ui import router as ui_router_module
+
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+    db_session = object()
+    application.dependency_overrides[require_authenticated_user] = lambda: (
+        AuthenticatedUser(user_id=42, is_admin=False)
+    )
+    application.dependency_overrides[get_db] = lambda: db_session
+
+    def raise_history_failure(*, user_id: int, db: object) -> None:
+        assert user_id == 42
+        assert db is db_session
+        raise RuntimeError("SELECT error_message FROM chat_exchanges")
+
+    monkeypatch.setattr(
+        ui_router_module,
+        "list_chat_exchange_history",
+        raise_history_failure,
+    )
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/chat")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert "error_message" not in response.text
     assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
