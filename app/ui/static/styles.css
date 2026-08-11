@@ -499,6 +499,31 @@ button:disabled {
   resize: vertical;
 }
 
+/* Pair concise keyboard guidance with the current character count. */
+.chat-form__meta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* De-emphasize persistent input guidance without hiding it. */
+.chat-form__help,
+.chat-form__counter {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+/* Keep the changing count stable and readable beside the helper. */
+.chat-form__counter {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Align the Chat submit action to the end edge. */
 .chat-form__actions {
   display: flex;

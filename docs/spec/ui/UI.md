@@ -187,14 +187,19 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
 
 - 질문 `textarea`, 전송 button, form 오류 영역을 제공합니다.
 - 질문 control에는 `required`와 `maxlength="1000"`을 적용합니다.
+- 질문 아래에는 입력 방식 helper와 `현재 글자 수 / 1000` 형식의 counter를 항상 표시하고
+  `aria-describedby`로 질문 control과 연결합니다. Counter는 매 입력을 live announcement하지 않습니다.
 - `maxlength="1000"`은 일반적인 입력 과정에서 1000자 초과 작성을 제한합니다. JavaScript의
   길이 검증은 programmatic value 변경처럼 HTML constraint를 우회한 상황을 위한 방어입니다.
 - 제출 시 JavaScript가 값을 `trim()`하고, 결과가 1~1000자가 아니면 API를 호출하지 않습니다.
 - 공백 입력에는 `질문을 입력해주세요.`, 1000자 초과 입력에는
   `질문은 1000자 이하로 입력해주세요.`를 표시합니다.
 - 유효한 질문은 공백을 제거한 전송값을 별도로 보관한 뒤 질문 control에서 즉시 제거합니다.
-  client validation에 실패한 값은 제거하지 않습니다.
-- Multiline 입력의 Enter key는 줄바꿈으로 유지하며, form 제출은 전송 button으로 수행합니다.
+  Counter도 즉시 `0 / 1000`으로 되돌립니다. Client validation에 실패한 값과 count는 유지합니다.
+- Primary pointer가 fine인 환경에서는 Enter가 form을 제출하고 Shift+Enter가 줄바꿈을 유지합니다.
+  Primary pointer가 coarse인 환경에서는 Enter가 줄바꿈을 유지하고 전송 button으로 제출합니다.
+- IME composition 중인 Enter는 제출하지 않습니다. Helper는 현재 pointer 환경에 맞춰
+  `Enter로 전송 · Shift+Enter로 줄바꿈` 또는 `Enter로 줄바꿈 · 전송 버튼으로 보내기`를 표시합니다.
 
 ### Browser 상태 전이
 
@@ -302,6 +307,7 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 - [ ] 본인의 이전 대화만 과거부터 최신 순서로 표시되고 빈 기록·실패 record 안내가 동작함
 - [ ] 대화 기록이 길어도 header와 질문 form은 보이며 기록 영역만 scroll되고 최초 진입 시 최신 대화가 표시됨
 - [ ] 빈 문자열·공백·1자·1000자·1000자 초과 입력을 검증함
+- [ ] Counter가 입력과 전송 후 초기화 상태를 반영하고 Desktop Enter·Shift+Enter·IME와 Mobile Enter가 계약대로 동작함
 - [ ] 전송 직후 pending Chat 항목과 `답변 생성 중…`이 표시되고 중복 전송이 차단됨
 - [ ] 성공·실패 후 같은 pending 항목이 교체되고 작성 중인 다음 draft가 유지됨
 - [ ] 실패 항목에 임의 ID·시각이 없으며 새로고침 후 실제 server history만 표시됨

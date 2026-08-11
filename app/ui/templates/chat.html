@@ -79,8 +79,19 @@
             rows="4"
             maxlength="1000"
             required
-            aria-describedby="chat-form-error"
+            aria-describedby="chat-input-help chat-character-count chat-form-error"
           ></textarea>
+
+          <div class="chat-form__meta">
+            <p id="chat-input-help" class="chat-form__help">
+              Enter로 전송 · Shift+Enter로 줄바꿈
+            </p>
+            <output
+              id="chat-character-count"
+              class="chat-form__counter"
+              for="chat-message"
+            >0 / 1000</output>
+          </div>
         </div>
 
         {# Accessible validation and request failure feedback. #}

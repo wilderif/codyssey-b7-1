@@ -17,6 +17,14 @@
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
   // Distance that keeps a reader anchored to the latest response update.
   const SCROLL_BOTTOM_THRESHOLD_PX = 48;
+  // Shared input limit used by validation and the visible character counter.
+  const MAX_MESSAGE_LENGTH = 1000;
+  // Primary-pointer query that keeps virtual keyboards multiline-friendly.
+  const COARSE_POINTER_QUERY = "(pointer: coarse)";
+  // Keyboard guidance for devices with a precise primary pointer.
+  const DESKTOP_INPUT_HELP = "Enter로 전송 · Shift+Enter로 줄바꿈";
+  // Keyboard guidance for touch-first devices without a practical Shift key.
+  const MOBILE_INPUT_HELP = "Enter로 줄바꿈 · 전송 버튼으로 보내기";
 
   // Form that owns the Chat submission flow.
   const form = document.getElementById("chat-form");
@@ -26,6 +34,10 @@
   const submitButton = document.getElementById("chat-submit");
   // Accessible container for client-side form errors.
   const formError = document.getElementById("chat-form-error");
+  // Persistent keyboard guidance associated with the question control.
+  const messageHelp = document.getElementById("chat-input-help");
+  // Visible count associated with the question control without live announcements.
+  const characterCount = document.getElementById("chat-character-count");
   // Timeline that receives pending and completed exchanges.
   const history = document.getElementById("chat-history");
   // Inert markup cloned for each pending exchange.
@@ -37,6 +49,8 @@
     !messageInput ||
     !submitButton ||
     !formError ||
+    !messageHelp ||
+    !characterCount ||
     !history ||
     !pendingTemplate
   ) {
@@ -45,6 +59,8 @@
 
   // Prevent duplicate requests until the active submission finishes.
   let isSubmitting = false;
+  // Primary-pointer state used to separate Desktop and Mobile Enter behavior.
+  const coarsePointer = window.matchMedia(COARSE_POINTER_QUERY);
 
   // Narrow an unknown JSON value to a plain object-like payload.
   function isObject(value) {
@@ -95,6 +111,34 @@
   function setFormError(message = "") {
     formError.textContent = message;
     formError.hidden = message.length === 0;
+  }
+
+  // Keep the concise keyboard guidance aligned with the active input mode.
+  function updateInputHelp() {
+    messageHelp.textContent = coarsePointer.matches
+      ? MOBILE_INPUT_HELP
+      : DESKTOP_INPUT_HELP;
+  }
+
+  // Reflect the raw textarea length without repeatedly announcing every keypress.
+  function updateCharacterCount() {
+    characterCount.value = `${messageInput.value.length} / ${MAX_MESSAGE_LENGTH}`;
+  }
+
+  // Submit with Desktop Enter while preserving multiline and IME composition.
+  function handleMessageKeydown(event) {
+    const isComposing = event.isComposing || event.keyCode === 229;
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      isComposing ||
+      coarsePointer.matches
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    form.requestSubmit(submitButton);
   }
 
   // Report whether the reader is still following the newest conversation.
@@ -187,7 +231,7 @@
       setFormError("질문을 입력해주세요.");
       return;
     }
-    if (submittedQuestion.length > 1000) {
+    if (submittedQuestion.length > MAX_MESSAGE_LENGTH) {
       setFormError("질문은 1000자 이하로 입력해주세요.");
       return;
     }
@@ -195,6 +239,7 @@
     // Clear the accepted draft and lock the form for one request.
     setFormError();
     messageInput.value = "";
+    updateCharacterCount();
     isSubmitting = true;
     submitButton.disabled = true;
 
@@ -249,5 +294,10 @@
 
   // Start the Chat request flow from the form's submit event.
   form.addEventListener("submit", handleSubmit);
+  messageInput.addEventListener("input", updateCharacterCount);
+  messageInput.addEventListener("keydown", handleMessageKeydown);
+  coarsePointer.addEventListener("change", updateInputHelp);
+  updateInputHelp();
+  updateCharacterCount();
   scrollHistoryToLatest();
 })();
