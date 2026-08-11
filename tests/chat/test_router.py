@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Generator, Sequence
 from datetime import UTC, datetime
 from unittest.mock import ANY
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -28,7 +29,7 @@ from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
 from app.chat.service import ChatResult, ChatService
 from app.core.database import get_db
-from app.core.request_id import RequestIdMiddleware
+from app.core.request_id import REQUEST_ID_HEADER, RequestIdMiddleware
 
 
 @pytest.fixture
@@ -348,19 +349,21 @@ def test_unhandled_error_log_hides_internal_error_detail(
     assert "secret_cookie" not in caplog.text
 
 
-def test_non_api_unhandled_error_preserves_framework_server_error(
+def test_non_api_unhandled_error_returns_safe_html_response(
     app: FastAPI,
     client: TestClient,
 ) -> None:
     @app.get("/non-api-fail")
     def non_api_fail() -> None:
-        raise RuntimeError("non-api failure")
+        raise RuntimeError("non-api secret failure")
 
     response = client.get("/non-api-fail")
 
     assert response.status_code == 500
-    assert "internal_error" not in response.text
-    assert response.headers.get("content-type", "") != "application/json"
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert "secret" not in response.text
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
 class _AnswerGenerator:
