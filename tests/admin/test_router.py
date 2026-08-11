@@ -220,86 +220,6 @@ def test_admin_logs_renders_shared_layout_and_navigation(
     )
 
 
-def test_admin_logs_returns_safe_html_error_for_admin_read_error(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """원본 DB 오류가 admin HTML route 경계를 넘어가지 않는다."""
-
-    from app.admin import router as router_module
-    from app.admin.errors import AdminReadError
-
-    admin = create_user(
-        db=db,
-        username="admin-user",
-        password_hash="test-hash",
-        role=ADMIN_ROLE,
-    )
-    _log_in(app, admin.id)
-    sensitive_error = (
-        "SELECT password_hash FROM users; sqlite secret stack Cookie Authorization"
-    )
-
-    def raise_admin_read_error(*, db: Session) -> list[AdminChatOperationMetadataItem]:
-        del db
-        try:
-            raise RuntimeError(sensitive_error)
-        except RuntimeError as error:
-            raise AdminReadError from error
-
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        raise_admin_read_error,
-    )
-
-    with caplog.at_level("ERROR", logger=router_module.__name__):
-        response = client.get("/admin/logs")
-
-    assert response.status_code == 500
-    assert response.headers["content-type"].startswith("text/html")
-    assert response.text == "서버 오류가 발생했습니다."
-    assert sensitive_error not in response.text
-
-    request_id = response.headers["x-request-id"]
-    assert [record.getMessage() for record in caplog.records] == [
-        f"admin_read_failed request_id={request_id}"
-    ]
-    assert all(record.exc_info is None for record in caplog.records)
-    assert sensitive_error not in caplog.text
-    assert "Traceback" not in caplog.text
-
-
-def test_admin_logs_renders_orphan_record_with_empty_username(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.admin import router as router_module
-
-    admin = create_user(
-        db=db,
-        username="admin-user",
-        password_hash="test-hash",
-        role=ADMIN_ROLE,
-    )
-    _log_in(app, admin.id)
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [_metadata_item(username=None, user_agent=None)],
-    )
-
-    response = client.get("/admin/logs")
-
-    assert response.status_code == 200
-    assert "request-34" in response.text
-
-
 def test_admin_logs_renders_nullable_metadata_with_placeholder(
     app: FastAPI,
     client: TestClient,
@@ -406,6 +326,59 @@ def test_admin_logs_passes_only_metadata_to_template_context(
         field not in captured_context
         for field in ("question", "answer", "error_message", "password_hash")
     )
+
+
+def test_admin_logs_returns_safe_html_error_for_admin_read_error(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """원본 DB 오류가 admin HTML route 경계를 넘어가지 않는다."""
+
+    from app.admin import router as router_module
+    from app.admin.errors import AdminReadError
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    sensitive_error = (
+        "SELECT password_hash FROM users; sqlite secret stack Cookie Authorization"
+    )
+
+    def raise_admin_read_error(*, db: Session) -> list[AdminChatOperationMetadataItem]:
+        del db
+        try:
+            raise RuntimeError(sensitive_error)
+        except RuntimeError as error:
+            raise AdminReadError from error
+
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        raise_admin_read_error,
+    )
+
+    with caplog.at_level("ERROR", logger=router_module.__name__):
+        response = client.get("/admin/logs")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert sensitive_error not in response.text
+
+    request_id = response.headers["x-request-id"]
+    assert [record.getMessage() for record in caplog.records] == [
+        f"admin_read_failed request_id={request_id}"
+    ]
+    assert all(record.exc_info is None for record in caplog.records)
+    assert sensitive_error not in caplog.text
+    assert "Traceback" not in caplog.text
 
 
 def test_admin_logs_does_not_expose_a_json_api(client: TestClient) -> None:

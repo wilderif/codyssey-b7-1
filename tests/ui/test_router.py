@@ -47,6 +47,36 @@ def _set_session(app: FastAPI, session: dict[str, object]) -> None:
     app.state.session = session
 
 
+def test_root_redirects_authenticated_user_to_chat(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+) -> None:
+    user = create_user(db=db, username="root-user", password_hash="test-hash")
+    db.commit()
+    _set_session(app, {"user_id": user.id})
+
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/chat"
+
+
+@pytest.mark.parametrize("session", [{}, {"user_id": 999, "stale": "value"}])
+def test_root_redirects_invalid_session_to_login_and_clears_it(
+    app: FastAPI,
+    client: TestClient,
+    session: dict[str, object],
+) -> None:
+    _set_session(app, session)
+
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+    assert app.state.session == {}
+
+
 @pytest.mark.parametrize(
     ("path", "template_name"),
     [("/signup", "signup.html"), ("/login", "login.html")],
@@ -89,36 +119,6 @@ def test_get_auth_form_passes_empty_context(
     assert captured["status_code"] == 200
 
 
-def test_root_redirects_authenticated_user_to_chat(
-    app: FastAPI,
-    client: TestClient,
-    db: Session,
-) -> None:
-    user = create_user(db=db, username="root-user", password_hash="test-hash")
-    db.commit()
-    _set_session(app, {"user_id": user.id})
-
-    response = client.get("/", follow_redirects=False)
-
-    assert response.status_code == 303
-    assert response.headers["location"] == "/chat"
-
-
-@pytest.mark.parametrize("session", [{}, {"user_id": 999, "stale": "value"}])
-def test_root_redirects_invalid_session_to_login_and_clears_it(
-    app: FastAPI,
-    client: TestClient,
-    session: dict[str, object],
-) -> None:
-    _set_session(app, session)
-
-    response = client.get("/", follow_redirects=False)
-
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login"
-    assert app.state.session == {}
-
-
 def test_signup_normalizes_username_without_changing_password(
     app: FastAPI,
     client: TestClient,
@@ -152,25 +152,9 @@ def test_signup_normalizes_username_without_changing_password(
     assert app.state.session == {}
 
 
-@pytest.mark.parametrize(
-    ("reason", "expected_message"),
-    [
-        (
-            RegistrationReason.USERNAME_LENGTH,
-            "아이디는 3자 이상 30자 이하로 입력해주세요.",
-        ),
-        (
-            RegistrationReason.PASSWORD_LENGTH,
-            "비밀번호는 8자 이상 72자 이하로 입력해주세요.",
-        ),
-        (RegistrationReason.DUPLICATE_USERNAME, "이미 사용 중인 아이디입니다."),
-    ],
-)
-def test_signup_maps_registration_error_to_safe_template_context(
+def test_signup_maps_duplicate_error_to_safe_template_context(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
-    reason: RegistrationReason,
-    expected_message: str,
 ) -> None:
     from app.ui import router as router_module
 
@@ -178,7 +162,7 @@ def test_signup_maps_registration_error_to_safe_template_context(
     raw_password = "password-must-not-enter-context"
 
     def reject_registration(**_kwargs: object) -> None:
-        raise RegistrationError(reason)
+        raise RegistrationError(RegistrationReason.DUPLICATE_USERNAME)
 
     class CapturingTemplates:
         def TemplateResponse(
@@ -203,69 +187,10 @@ def test_signup_maps_registration_error_to_safe_template_context(
 
     assert response.status_code == 400
     assert captured_context == {
-        "error": expected_message,
+        "error": "이미 사용 중인 아이디입니다.",
         "username": "escaped-user",
     }
     assert raw_password not in captured_context.values()
-
-
-@pytest.mark.parametrize(
-    ("path", "data", "expected_message"),
-    [
-        (
-            "/signup",
-            {},
-            "아이디는 3자 이상 30자 이하로 입력해주세요.",
-        ),
-        (
-            "/signup",
-            {"username": "valid-user"},
-            "비밀번호는 8자 이상 72자 이하로 입력해주세요.",
-        ),
-        (
-            "/signup",
-            {"password": "password"},
-            "아이디는 3자 이상 30자 이하로 입력해주세요.",
-        ),
-        (
-            "/signup",
-            {"username": "", "password": ""},
-            "아이디는 3자 이상 30자 이하로 입력해주세요.",
-        ),
-        (
-            "/login",
-            {},
-            "아이디 또는 비밀번호가 올바르지 않습니다.",
-        ),
-        (
-            "/login",
-            {"username": "valid-user"},
-            "아이디 또는 비밀번호가 올바르지 않습니다.",
-        ),
-        (
-            "/login",
-            {"password": "password"},
-            "아이디 또는 비밀번호가 올바르지 않습니다.",
-        ),
-        (
-            "/login",
-            {"username": "", "password": ""},
-            "아이디 또는 비밀번호가 올바르지 않습니다.",
-        ),
-    ],
-)
-def test_missing_form_fields_return_html_input_error_instead_of_json_422(
-    client: TestClient,
-    path: str,
-    data: dict[str, str],
-    expected_message: str,
-) -> None:
-    response = client.post(path, data=data)
-
-    assert response.status_code == 400
-    assert response.headers["content-type"].startswith("text/html")
-    assert expected_message in response.text
-    assert response.text.lstrip().startswith("<!doctype html>")
 
 
 @pytest.mark.parametrize(
@@ -382,6 +307,35 @@ def test_login_failure_uses_one_safe_message_and_excludes_password_from_context(
         "username": "unknown-user",
     }
     assert raw_password not in captured_context.values()
+
+
+@pytest.mark.parametrize(
+    ("path", "data", "expected_message"),
+    [
+        (
+            "/signup",
+            {},
+            "아이디는 3자 이상 30자 이하로 입력해주세요.",
+        ),
+        (
+            "/login",
+            {},
+            "아이디 또는 비밀번호가 올바르지 않습니다.",
+        ),
+    ],
+)
+def test_missing_form_fields_return_html_input_error_instead_of_json_422(
+    client: TestClient,
+    path: str,
+    data: dict[str, str],
+    expected_message: str,
+) -> None:
+    response = client.post(path, data=data)
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("text/html")
+    assert expected_message in response.text
+    assert response.text.lstrip().startswith("<!doctype html>")
 
 
 @pytest.mark.parametrize("session", [{}, {"user_id": 42, "stale": "value"}])

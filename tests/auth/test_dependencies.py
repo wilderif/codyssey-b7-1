@@ -34,12 +34,6 @@ def make_request(session: Mapping[str, object]) -> Request:
     )
 
 
-def test_get_current_user_id_returns_session_user_id() -> None:
-    request = make_request({"user_id": 42})
-
-    assert get_current_user_id(request) == 42
-
-
 def test_set_session_user_id_replaces_existing_session_data() -> None:
     request = make_request({"stale": "value", "user_id": 1})
 
@@ -68,6 +62,12 @@ def test_clear_session_user_id_removes_all_session_data() -> None:
 
     assert request.session == {}
     assert get_session_user_id(request) is None
+
+
+def test_get_current_user_id_returns_session_user_id() -> None:
+    request = make_request({"user_id": 42})
+
+    assert get_current_user_id(request) == 42
 
 
 @pytest.mark.parametrize(

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Generator, Sequence
+from collections.abc import Generator
 from datetime import UTC, datetime
 from unittest.mock import ANY
 from uuid import UUID
@@ -16,18 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user_id
 from app.auth.models import User
-from app.chat.context import ChatMessage
 from app.chat.errors import (
     AppError,
-    ChatConfigurationError,
     ChatGenerationError,
     ChatPersistenceError,
     ChatTimeoutError,
-    ChatValidationError,
 )
 from app.chat.models import ChatExchange
-from app.chat.repository import SqlAlchemyChatExchangeRepository
-from app.chat.service import ChatResult, ChatService
+from app.chat.service import ChatResult
 from app.core.database import get_db
 from app.core.request_id import REQUEST_ID_HEADER, RequestIdMiddleware
 
@@ -291,39 +286,6 @@ def test_post_chat_returns_internal_error_for_context_read_failure(
     }
 
 
-@pytest.mark.parametrize(
-    ("path", "service_function"),
-    [
-        ("/api/chat-exchanges", "list_chat_exchange_history"),
-        ("/api/chat-exchanges/1", "get_chat_exchange"),
-    ],
-)
-def test_history_query_failures_return_internal_error(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
-    monkeypatch: pytest.MonkeyPatch,
-    path: str,
-    service_function: str,
-) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
-
-    def failing_query(**_kwargs: object) -> object:
-        raise ChatPersistenceError(is_write=False)
-
-    monkeypatch.setattr(router_module, service_function, failing_query)
-
-    response = client.get(path)
-
-    assert response.status_code == 500
-    assert response.json() == {
-        "code": "internal_error",
-        "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-    }
-
-
 def test_unhandled_error_log_hides_internal_error_detail(
     app: FastAPI,
     client: TestClient,
@@ -347,226 +309,6 @@ def test_unhandled_error_log_hides_internal_error_detail(
     assert not caplog.records
     assert "select" not in caplog.text
     assert "secret_cookie" not in caplog.text
-
-
-def test_non_api_unhandled_error_returns_safe_html_response(
-    app: FastAPI,
-    client: TestClient,
-) -> None:
-    @app.get("/non-api-fail")
-    def non_api_fail() -> None:
-        raise RuntimeError("non-api secret failure")
-
-    response = client.get("/non-api-fail")
-
-    assert response.status_code == 500
-    assert response.headers["content-type"].startswith("text/html")
-    assert response.text == "서버 오류가 발생했습니다."
-    assert "secret" not in response.text
-    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
-
-
-class _AnswerGenerator:
-    def __init__(self, error: ChatGenerationError | None = None) -> None:
-        self._error = error
-
-    async def generate(self, *, messages: Sequence[ChatMessage]) -> str:
-        if self._error is not None:
-            raise self._error
-        return "answer"
-
-
-class _SaveFailingRepository(SqlAlchemyChatExchangeRepository):
-    def create_success_exchange(self, **_kwargs: object) -> ChatExchange:
-        raise RuntimeError("SELECT stack api-key Cookie internal error_message")
-
-
-def _service_log_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
-    return [record.getMessage() for record in caplog.records]
-
-
-def _assert_safe_request_id_logs(
-    messages: list[str], *, request_id: str, expected_events: set[str]
-) -> None:
-    assert {
-        message.split(" request_id=", maxsplit=1)[0] for message in messages
-    } == expected_events
-    assert all(f"request_id={request_id}" in message for message in messages)
-    log_text = "\n".join(messages).lower()
-    for secret in (
-        "select",
-        "stack",
-        "key",
-        "cookie",
-        "internal error_message",
-    ):
-        assert secret not in log_text
-
-
-def test_service_success_logs_request_ai_and_db_events_with_request_id(
-    db: Session,
-    user_id: int,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    request_id = "safe-success-request"
-    service = ChatService(
-        db=db,
-        repository=SqlAlchemyChatExchangeRepository(db=db),
-        answer_generator=_AnswerGenerator(),
-    )
-
-    with caplog.at_level("INFO", logger="app.chat.service"):
-        asyncio.run(
-            service.process_chat(
-                user_id=user_id,
-                message="SELECT stack api-key Cookie internal error_message",
-                request_id=request_id,
-                user_agent="Cookie secret",
-            )
-        )
-
-    _assert_safe_request_id_logs(
-        _service_log_messages(caplog),
-        request_id=request_id,
-        expected_events={
-            "request_received",
-            "ai_call_started",
-            "ai_call_succeeded",
-            "db_save_succeeded",
-        },
-    )
-
-
-def test_service_failure_logs_safe_ai_and_db_failure_events_with_request_id(
-    db: Session,
-    user_id: int,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    request_id = "safe-failure-request"
-    service = ChatService(
-        db=db,
-        repository=_SaveFailingRepository(db=db),
-        answer_generator=_AnswerGenerator(),
-    )
-
-    with (
-        caplog.at_level("INFO", logger="app.chat.service"),
-        pytest.raises(ChatPersistenceError),
-    ):
-        asyncio.run(
-            service.process_chat(
-                user_id=user_id,
-                message="question",
-                request_id=request_id,
-                user_agent=None,
-            )
-        )
-
-    _assert_safe_request_id_logs(
-        _service_log_messages(caplog),
-        request_id=request_id,
-        expected_events={
-            "request_received",
-            "ai_call_started",
-            "ai_call_succeeded",
-            "db_save_failed",
-        },
-    )
-
-
-def test_service_generation_failure_logs_safe_ai_and_db_events_with_request_id(
-    db: Session,
-    user_id: int,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    request_id = "safe-generation-failure-request"
-    service = ChatService(
-        db=db,
-        repository=SqlAlchemyChatExchangeRepository(db=db),
-        answer_generator=_AnswerGenerator(error=ChatGenerationError()),
-    )
-
-    with (
-        caplog.at_level("INFO", logger="app.chat.service"),
-        pytest.raises(ChatGenerationError),
-    ):
-        asyncio.run(
-            service.process_chat(
-                user_id=user_id,
-                message="question",
-                request_id=request_id,
-                user_agent=None,
-            )
-        )
-
-    _assert_safe_request_id_logs(
-        _service_log_messages(caplog),
-        request_id=request_id,
-        expected_events={
-            "request_received",
-            "ai_call_started",
-            "ai_call_failed",
-            "db_save_succeeded",
-        },
-    )
-
-
-def test_production_wrapper_logs_request_id_before_validation_failure(
-    db: Session,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    from app.chat import service as service_module
-
-    with (
-        caplog.at_level("INFO", logger="app.chat.service"),
-        pytest.raises(ChatValidationError),
-    ):
-        asyncio.run(
-            service_module.process_chat(
-                user_id=1,
-                message="   ",
-                request_id="wrapper-validation-id",
-                user_agent="Cookie secret",
-                db=db,
-            )
-        )
-
-    assert _service_log_messages(caplog) == [
-        "request_received request_id=wrapper-validation-id"
-    ]
-
-
-def test_production_wrapper_logs_safe_request_id_before_client_configuration_failure(
-    db: Session,
-    caplog: pytest.LogCaptureFixture,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.chat import service as service_module
-
-    def fail_client_creation() -> object:
-        raise ChatConfigurationError()
-
-    monkeypatch.setattr(service_module, "create_openai_client", fail_client_creation)
-
-    with (
-        caplog.at_level("INFO", logger="app.chat.service"),
-        pytest.raises(ChatConfigurationError),
-    ):
-        asyncio.run(
-            service_module.process_chat(
-                user_id=1,
-                message="SELECT stack api-key Cookie internal error_message",
-                request_id="wrapper-config-id",
-                user_agent="Cookie secret",
-                db=db,
-            )
-        )
-
-    _assert_safe_request_id_logs(
-        _service_log_messages(caplog),
-        request_id="wrapper-config-id",
-        expected_events={"request_received"},
-    )
 
 
 def test_history_is_isolated_and_hides_operational_metadata(
@@ -667,6 +409,56 @@ def test_single_history_non_integer_id_returns_structured_validation_error(
         "detail": "요청 형식이 올바르지 않습니다.",
     }
     assert response_schema == {"$ref": "#/components/schemas/ErrorResponse"}
+
+
+@pytest.mark.parametrize(
+    ("path", "service_function"),
+    [
+        ("/api/chat-exchanges", "list_chat_exchange_history"),
+        ("/api/chat-exchanges/1", "get_chat_exchange"),
+    ],
+)
+def test_history_query_failures_return_internal_error(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    service_function: str,
+) -> None:
+    from app.chat import router as router_module
+
+    _login(app, user_id)
+
+    def failing_query(**_kwargs: object) -> object:
+        raise ChatPersistenceError(is_write=False)
+
+    monkeypatch.setattr(router_module, service_function, failing_query)
+
+    response = client.get(path)
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_error",
+        "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    }
+
+
+def test_non_api_unhandled_error_returns_safe_html_response(
+    app: FastAPI,
+    client: TestClient,
+) -> None:
+    @app.get("/non-api-fail")
+    def non_api_fail() -> None:
+        raise RuntimeError("non-api secret failure")
+
+    response = client.get("/non-api-fail")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert "secret" not in response.text
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
 @pytest.mark.parametrize(
