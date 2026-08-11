@@ -73,14 +73,9 @@
     return { code: payload.code, detail: payload.detail };
   }
 
-  function showFormError(message) {
+  function setFormError(message = "") {
     formError.textContent = message;
-    formError.hidden = false;
-  }
-
-  function clearFormError() {
-    formError.textContent = "";
-    formError.hidden = true;
+    formError.hidden = message.length === 0;
   }
 
   function createPendingExchange(question) {
@@ -116,6 +111,12 @@
     pendingExchange.responseElement.textContent = message;
   }
 
+  function restoreIdleState() {
+    isSubmitting = false;
+    submitButton.disabled = false;
+    messageInput.focus();
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -125,21 +126,20 @@
 
     const submittedQuestion = messageInput.value.trim();
     if (submittedQuestion.length === 0) {
-      showFormError("질문을 입력해주세요.");
+      setFormError("질문을 입력해주세요.");
       return;
     }
     if (submittedQuestion.length > 1000) {
-      showFormError("질문은 1000자 이하로 입력해주세요.");
+      setFormError("질문은 1000자 이하로 입력해주세요.");
       return;
     }
 
-    clearFormError();
+    setFormError();
     messageInput.value = "";
     isSubmitting = true;
     submitButton.disabled = true;
 
     const pendingExchange = createPendingExchange(submittedQuestion);
-    let isRedirecting = false;
 
     try {
       const response = await fetch("/api/chat", {
@@ -157,33 +157,26 @@
         const result = parseSuccessPayload(payload);
         if (result === null) {
           renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
+        } else {
+          renderSuccess(pendingExchange, result);
+        }
+      } else {
+        const error = parseErrorPayload(payload);
+        if (error?.code === "not_authenticated") {
+          window.location.assign("/login");
           return;
         }
 
-        renderSuccess(pendingExchange, result);
-        return;
+        const message =
+          error !== null && DISPLAYABLE_ERROR_CODES.has(error.code)
+            ? error.detail
+            : GENERIC_ERROR_MESSAGE;
+        renderFailure(pendingExchange, message);
       }
-
-      const error = parseErrorPayload(payload);
-      if (error?.code === "not_authenticated") {
-        isRedirecting = true;
-        window.location.assign("/login");
-        return;
-      }
-
-      const message =
-        error !== null && DISPLAYABLE_ERROR_CODES.has(error.code)
-          ? error.detail
-          : GENERIC_ERROR_MESSAGE;
-      renderFailure(pendingExchange, message);
     } catch {
       renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
-    } finally {
-      if (!isRedirecting) {
-        isSubmitting = false;
-        submitButton.disabled = false;
-        messageInput.focus();
-      }
     }
+
+    restoreIdleState();
   });
 })();
