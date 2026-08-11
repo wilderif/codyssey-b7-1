@@ -1,4 +1,4 @@
-"""Server-rendered 인증 화면의 HTTP layer다."""
+"""Render authentication and chat pages for browser clients."""
 
 from __future__ import annotations
 
@@ -25,27 +25,30 @@ from app.auth.service import (
 from app.chat.service import list_chat_exchange_history
 from app.core.database import get_db
 
-router = APIRouter()
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-
+# Map registration failures to safe, user-facing messages.
 _REGISTRATION_ERROR_MESSAGES = {
     RegistrationReason.USERNAME_LENGTH: "아이디는 3자 이상 30자 이하로 입력해주세요.",
     RegistrationReason.PASSWORD_LENGTH: "비밀번호는 8자 이상 72자 이하로 입력해주세요.",
     RegistrationReason.DUPLICATE_USERNAME: "이미 사용 중인 아이디입니다.",
 }
+# Avoid revealing which login credential was invalid.
 _LOGIN_ERROR_MESSAGE = "아이디 또는 비밀번호가 올바르지 않습니다."
+
+# Configure the routes and shared Jinja template loader for UI responses.
+router = APIRouter()
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 @router.get("/", dependencies=[Depends(require_authenticated_user)])
 def get_root() -> RedirectResponse:
-    """유효한 login 사용자를 Chat 화면으로 이동시킨다."""
+    """Redirect an authenticated user to the chat page."""
 
     return RedirectResponse(url="/chat", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/signup", response_class=HTMLResponse)
 def get_signup(request: Request) -> Response:
-    """빈 회원가입 form을 제공한다."""
+    """Render an empty signup form."""
 
     return _render_auth_template(request, "signup.html")
 
@@ -57,8 +60,9 @@ def post_signup(
     username: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
 ) -> Response:
-    """회원가입 form을 처리하고 Login 화면으로 이동시킨다."""
+    """Register a user or render a safe signup error."""
 
+    # Normalize usernames while preserving the password exactly as submitted.
     username = username.strip()
     try:
         register_user(
@@ -80,7 +84,7 @@ def post_signup(
 
 @router.get("/login", response_class=HTMLResponse)
 def get_login(request: Request) -> Response:
-    """빈 Login form을 제공한다."""
+    """Render an empty login form."""
 
     return _render_auth_template(request, "login.html")
 
@@ -92,8 +96,9 @@ def post_login(
     username: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
 ) -> Response:
-    """Login form을 검증하고 성공한 사용자 Session을 생성한다."""
+    """Authenticate a user and establish the browser session."""
 
+    # Normalize usernames while preserving the password exactly as submitted.
     username = username.strip()
     user = authenticate_user(
         db=db,
@@ -115,7 +120,7 @@ def post_login(
 
 @router.post("/logout")
 def post_logout(request: Request) -> RedirectResponse:
-    """현재 Session을 제거하고 Login 화면으로 이동시킨다."""
+    """Clear the current session and redirect to the login page."""
 
     clear_session_user_id(request)
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
@@ -130,7 +135,7 @@ def get_chat(
     ],
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
-    """로그인 사용자의 이전 대화와 Chat 입력 화면을 제공한다."""
+    """Render the authenticated user's chat history and input form."""
 
     chat_exchanges = list_chat_exchange_history(
         user_id=authenticated_user.user_id,
@@ -154,6 +159,8 @@ def _render_auth_template(
     username: str = "",
     status_code: int = status.HTTP_200_OK,
 ) -> Response:
+    """Render an authentication form with its safe display context."""
+
     return templates.TemplateResponse(
         request=request,
         name=template_name,
