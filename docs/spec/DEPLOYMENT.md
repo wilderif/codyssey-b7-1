@@ -96,7 +96,7 @@ Healthcheck의 HTTP response contract는 [API 계약](api/API.md#8-health-api)�
 
 ### 실제 배포 URL 기록
 
-배포 URL: 미작성 (Railway 배포 완료 후 실제 URL 입력)
+배포 URL: https://codyssey-b7-1-production.up.railway.app
 
 Production service URL은 Railway service에 연결한 public HTTPS domain입니다. 실제 URL은 deployment가
 생성하는 environment-specific 값이므로 source code나 environment 공통 기본값으로 고정하지 않습니다.
@@ -106,12 +106,18 @@ Production service URL은 Railway service에 연결한 public HTTPS domain입니
 외부 network에서 발급된 URL을 사용해 다음 smoke test를 실행합니다.
 
 ```bash
-DEPLOYMENT_URL=https://<railway-public-domain>
+DEPLOYMENT_URL=https://codyssey-b7-1-production.up.railway.app
 curl --fail --silent --show-error "$DEPLOYMENT_URL/health"
 ```
 
 정상 응답은 API Health 계약과 일치해야 합니다. 이 확인은 process 접근성을 검증하며 OpenAI 호출이나
 DB read/write 상태를 검사하지 않습니다.
+
+2026-08-11 외부 network에서 위 command를 실행해 다음 정상 응답을 확인했습니다.
+
+```json
+{"status":"ok"}
+```
 
 ### 배포 후 기능 smoke test
 
