@@ -232,12 +232,20 @@ button:disabled {
   color: var(--color-muted);
 }
 
-.chat-nav {
+.chat-nav,
+.admin-nav {
   display: flex;
   min-width: 0;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-2);
+}
+
+.chat-nav {
+  justify-content: flex-end;
+}
+
+.admin-nav {
+  flex-wrap: wrap;
 }
 
 .chat-nav__link,
@@ -263,19 +271,24 @@ button:disabled {
   color: #ffffff;
 }
 
-.chat-nav__logout {
+.chat-nav__logout,
+.admin-nav__logout {
   margin: 0;
 }
 
-.chat-main {
+.chat-main,
+.admin-main {
   display: grid;
-  width: min(100%, 56rem);
   min-width: 0;
   margin: 0 auto;
-  flex: 1;
   align-content: start;
   gap: var(--space-6);
   padding: clamp(var(--space-4), 5vw, var(--space-8));
+}
+
+.chat-main {
+  width: min(100%, 56rem);
+  flex: 1;
 }
 
 .chat-history {
@@ -284,14 +297,18 @@ button:disabled {
   gap: var(--space-6);
 }
 
-.chat-empty-state {
+.chat-empty-state,
+.admin-empty-state {
   margin: 0;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-large);
-  padding: var(--space-8) var(--space-4);
   background: var(--color-surface);
   color: var(--color-muted);
   text-align: center;
+}
+
+.chat-empty-state {
+  padding: var(--space-8) var(--space-4);
 }
 
 .chat-exchange {
@@ -387,45 +404,14 @@ button:disabled {
   gap: var(--space-3);
 }
 
-.chat-form__field {
-  display: grid;
+.chat-form .form-field {
   min-width: 0;
-  gap: var(--space-2);
 }
 
-.chat-form__field label {
-  font-weight: 700;
-}
-
-.chat-form__field textarea {
-  width: 100%;
+.chat-form textarea {
   min-width: 0;
   min-height: 7rem;
   resize: vertical;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-small);
-  padding: var(--space-3);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.chat-form__field textarea:hover {
-  border-color: var(--color-muted);
-}
-
-.chat-form__field textarea:focus {
-  border-color: var(--color-focus);
-}
-
-.chat-form__error {
-  margin: 0;
-  border: 1px solid var(--color-error-border);
-  border-left-width: 0.3rem;
-  border-radius: var(--radius-small);
-  padding: var(--space-3);
-  background: var(--color-error-background);
-  color: var(--color-error-text);
-  font-weight: 600;
 }
 
 .chat-form__actions {
@@ -440,13 +426,7 @@ button:disabled {
 }
 
 .admin-main {
-  display: grid;
   width: min(100%, 80rem);
-  min-width: 0;
-  margin: 0 auto;
-  align-content: start;
-  gap: var(--space-6);
-  padding: clamp(var(--space-4), 5vw, var(--space-8));
 }
 
 .admin-header {
@@ -463,18 +443,6 @@ button:disabled {
 .admin-header__description {
   margin: 0;
   color: var(--color-muted);
-}
-
-.admin-nav {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.admin-nav__logout {
-  margin: 0;
 }
 
 .admin-table-container {
@@ -535,13 +503,7 @@ button:disabled {
 }
 
 .admin-empty-state {
-  margin: 0;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-large);
   padding: clamp(var(--space-6), 8vw, var(--space-8));
-  background: var(--color-surface);
-  color: var(--color-muted);
-  text-align: center;
 }
 
 @media (max-width: 30rem) {
@@ -558,23 +520,31 @@ button:disabled {
     flex-direction: column;
   }
 
-  .chat-nav {
+  .chat-nav,
+  .admin-nav {
     align-items: stretch;
     flex-wrap: wrap;
+  }
+
+  .chat-nav {
     justify-content: flex-start;
   }
 
   .chat-nav__link,
-  .chat-nav__logout {
+  .chat-nav__logout,
+  .admin-nav__link,
+  .admin-nav__logout {
     min-width: 0;
     flex: 1 1 8rem;
   }
 
-  .chat-nav__logout button {
+  .chat-nav__logout button,
+  .admin-nav__logout button {
     width: 100%;
   }
 
-  .chat-main {
+  .chat-main,
+  .admin-main {
     gap: var(--space-4);
     padding: var(--space-4);
   }
@@ -590,25 +560,6 @@ button:disabled {
 
   .chat-form__actions,
   .chat-form__actions button {
-    width: 100%;
-  }
-
-  .admin-main {
-    gap: var(--space-4);
-    padding: var(--space-4);
-  }
-
-  .admin-nav {
-    align-items: stretch;
-  }
-
-  .admin-nav__link,
-  .admin-nav__logout {
-    min-width: 0;
-    flex: 1 1 8rem;
-  }
-
-  .admin-nav__logout button {
     width: 100%;
   }
 
