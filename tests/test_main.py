@@ -39,6 +39,7 @@ def _settings(
     }
     if app_env == "production":
         values.update(
+            DATABASE_URL="sqlite:///./data/production-test.db",
             OPENAI_API_KEY="test-openai-key",
             OPENAI_MODEL="test-openai-model",
         )
