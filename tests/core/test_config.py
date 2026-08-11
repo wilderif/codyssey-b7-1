@@ -15,6 +15,7 @@ pytestmark = pytest.mark.usefixtures("isolated_env_file_directory")
 def _production_settings_values(session_secret: str | None) -> dict[str, object]:
     return {
         "APP_ENV": "production",
+        "DATABASE_URL": "sqlite:////data/chatbot.db",
         "SESSION_SECRET": session_secret,
         "OPENAI_API_KEY": "test-openai-api-key",
         "OPENAI_MODEL": "test-openai-model",
@@ -139,6 +140,14 @@ def test_production_rejects_missing_session_secret() -> None:
     del values["SESSION_SECRET"]
 
     with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings.model_validate(values)
+
+
+def test_production_rejects_missing_database_url() -> None:
+    values = _production_settings_values("valid-session-secret")
+    del values["DATABASE_URL"]
+
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
         Settings.model_validate(values)
 
 

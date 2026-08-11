@@ -25,7 +25,7 @@ PORT=
 | `OPENAI_API_KEY` | 기본값 없음 | Server의 OpenAI API 인증 secret. Browser에 노출하거나 repository에 실제 값을 기록하지 않음 |
 | `OPENAI_MODEL` | 설정값: `gpt-5-nano` | Chat answer 생성에 사용할 OpenAI model. 현재 비용 우선 선택값 |
 | `OPENAI_TIMEOUT_SECONDS` | `30` | OpenAI request timeout. 0보다 큰 숫자만 허용 |
-| `DATABASE_URL` | `sqlite:///./data/chatbot.db` | Local SQLite 연결 URL |
+| `DATABASE_URL` | Local 기본값: `sqlite:///./data/chatbot.db`; production에서는 필수 | Local SQLite 연결 URL. production에서는 명시적으로 설정하지 않으면 application 시작을 거부해 ephemeral file로의 fallback을 막음 |
 | `APP_ENV` | `local`; `production` 허용 | 실행 environment를 구분. `production`에서는 production 보안·설정 validation을 적용 |
 | `LOG_LEVEL` | `INFO` | Application log level |
 | `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 기본값은 `admin`이며 앞뒤 공백 제거 후 3~30자를 허용 |

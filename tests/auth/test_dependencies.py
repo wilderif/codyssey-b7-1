@@ -65,10 +65,15 @@ def test_clear_session_user_id_removes_all_session_data() -> None:
     assert get_session_user_id(request) is None
 
 
-def test_get_current_user_id_returns_session_user_id() -> None:
-    request = _make_request({"user_id": 42})
+def test_get_current_user_id_returns_existing_session_user_id(db: Session) -> None:
+    user = create_user(
+        db=db,
+        username="json-auth-user",
+        password_hash="test-hash",
+    )
+    request = _make_request({"user_id": user.id})
 
-    assert get_current_user_id(request) == 42
+    assert get_current_user_id(request, db) == user.id
 
 
 @pytest.mark.parametrize(
@@ -84,10 +89,30 @@ def test_get_current_user_id_returns_session_user_id() -> None:
 )
 def test_get_current_user_id_rejects_invalid_session(
     session: Mapping[str, object],
+    db: Session,
 ) -> None:
     with pytest.raises(HTTPException) as error:
-        get_current_user_id(_make_request(session))
+        get_current_user_id(_make_request(session), db)
 
+    assert error.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert error.value.detail == "로그인이 필요합니다."
+
+
+def test_get_current_user_id_clears_deleted_user_session(db: Session) -> None:
+    user = create_user(
+        db=db,
+        username="deleted-json-auth-user",
+        password_hash="test-hash",
+    )
+    db.commit()
+    request = _make_request({"user_id": user.id, "stale": "value"})
+    db.delete(user)
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        get_current_user_id(request, db)
+
+    assert request.session == {}
     assert error.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert error.value.detail == "로그인이 필요합니다."
 
