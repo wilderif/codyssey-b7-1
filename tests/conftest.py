@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,6 +14,16 @@ from sqlalchemy.pool import StaticPool
 from app.auth.models import User
 from app.chat.models import ChatExchange  # noqa: F401
 from app.core.database import Base
+
+
+@pytest.fixture
+def isolated_env_file_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Repository의 .env와 격리된 작업 directory를 제공한다."""
+
+    monkeypatch.chdir(tmp_path)
 
 
 @pytest.fixture
@@ -40,12 +51,22 @@ def db() -> Generator[Session, None, None]:
 
 
 @pytest.fixture
-def user_id(db: Session) -> int:
+def user_id_factory(db: Session) -> Callable[[str], int]:
+    """Username으로 test User를 만들고 ID를 반환하는 factory를 제공한다."""
+
+    def create_test_user(username: str) -> int:
+        user = User(username=username, password_hash="test-hash")
+        db.add(user)
+        db.flush()
+        return user.id
+
+    return create_test_user
+
+
+@pytest.fixture
+def user_id(db: Session, user_id_factory: Callable[[str], int]) -> int:
     """test용 login 사용자 ID를 반환한다."""
 
-    user = User(username="test-user", password_hash="test-hash")
-    db.add(user)
-    db.flush()
-    created_user_id = user.id
+    created_user_id = user_id_factory("test-user")
     db.commit()
     return created_user_id

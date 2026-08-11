@@ -528,6 +528,49 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     )
 
 
+def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
+    html = _render_template("admin_logs.html", items=[])
+    collector = _collect_tags(html)
+    body = _find_tag(collector, "body", "class", "admin-page")
+    main = _find_tag(collector, "main", "id", "main-content")
+    chat_link = _find_tag(collector, "a", "href", "/chat")
+    logout_form = _find_tag(collector, "form", "action", "/logout")
+
+    assert body is not None
+    assert main is not None
+    assert chat_link["class"] == "protected-nav__link"
+    assert logout_form["method"] == "post"
+    assert "Chat으로 돌아가기" in html
+    assert "<title>관리자 운영 기록 | Codyssey</title>" in html
+    assert html.count('<link rel="stylesheet" href="/static/styles.css">') == 1
+    assert '<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>' in html
+    assert html.count("<h1") == 1
+    assert 'src="/static/chat.js"' not in html
+
+
+def test_admin_template_marks_cells_by_wrapping_behavior() -> None:
+    html = _render_template(
+        "admin_logs.html",
+        items=[
+            {
+                "user_id": 1,
+                "username": "admin",
+                "chat_exchange_id": 12,
+                "created_at": datetime(2026, 8, 11, 5, 56, tzinfo=UTC),
+                "request_id": "0f45c412-0525-4a72-8c15-3d4231dfd46c",
+                "user_agent": "ExampleBrowser/1.0",
+                "response_time_ms": 3552,
+                "status": "success",
+                "error_code": None,
+            }
+        ],
+    )
+
+    assert html.count('class="admin-table__cell--compact"') == 7
+    assert html.count('class="admin-table__cell--request-id"') == 1
+    assert html.count('class="admin-table__cell--user-agent"') == 1
+
+
 def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
     styles = STYLES_PATH.read_text(encoding="utf-8")
 
@@ -575,46 +618,3 @@ def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
     responsive_styles = styles[styles.index("@media (max-width:") :]
     assert ".admin-main" in responsive_styles
     assert ".admin-table-container" in responsive_styles
-
-
-def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
-    html = _render_template("admin_logs.html", items=[])
-    collector = _collect_tags(html)
-    body = _find_tag(collector, "body", "class", "admin-page")
-    main = _find_tag(collector, "main", "id", "main-content")
-    chat_link = _find_tag(collector, "a", "href", "/chat")
-    logout_form = _find_tag(collector, "form", "action", "/logout")
-
-    assert body is not None
-    assert main is not None
-    assert chat_link["class"] == "protected-nav__link"
-    assert logout_form["method"] == "post"
-    assert "Chat으로 돌아가기" in html
-    assert "<title>관리자 운영 기록 | Codyssey</title>" in html
-    assert html.count('<link rel="stylesheet" href="/static/styles.css">') == 1
-    assert '<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>' in html
-    assert html.count("<h1") == 1
-    assert 'src="/static/chat.js"' not in html
-
-
-def test_admin_template_marks_cells_by_wrapping_behavior() -> None:
-    html = _render_template(
-        "admin_logs.html",
-        items=[
-            {
-                "user_id": 1,
-                "username": "admin",
-                "chat_exchange_id": 12,
-                "created_at": datetime(2026, 8, 11, 5, 56, tzinfo=UTC),
-                "request_id": "0f45c412-0525-4a72-8c15-3d4231dfd46c",
-                "user_agent": "ExampleBrowser/1.0",
-                "response_time_ms": 3552,
-                "status": "success",
-                "error_code": None,
-            }
-        ],
-    )
-
-    assert html.count('class="admin-table__cell--compact"') == 7
-    assert html.count('class="admin-table__cell--request-id"') == 1
-    assert html.count('class="admin-table__cell--user-agent"') == 1

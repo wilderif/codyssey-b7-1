@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, fields
 from datetime import UTC, datetime, timedelta
 
@@ -13,18 +14,10 @@ from app.admin.repository import (
     AdminChatOperationMetadataRow,
     SqlAlchemyAdminRepository,
 )
-from app.auth.models import User
 from app.chat.models import ChatExchange
 
 
-def add_user(db: Session, username: str) -> int:
-    user = User(username=username, password_hash="test-hash")
-    db.add(user)
-    db.flush()
-    return user.id
-
-
-def add_exchange(
+def _add_exchange(
     db: Session,
     *,
     user_id: int,
@@ -52,31 +45,32 @@ def add_exchange(
 
 def test_list_metadata_returns_exact_safe_projection_newest_first_and_keeps_orphan(
     db: Session,
+    user_id_factory: Callable[[str], int],
 ) -> None:
-    first_user_id = add_user(db, "first-user")
-    second_user_id = add_user(db, "second-user")
-    orphan_user_id = add_user(db, "removed-user")
+    first_user_id = user_id_factory("first-user")
+    second_user_id = user_id_factory("second-user")
+    orphan_user_id = user_id_factory("removed-user")
     base_time = datetime(2026, 8, 8, tzinfo=UTC)
-    old_exchange = add_exchange(
+    old_exchange = _add_exchange(
         db,
         user_id=first_user_id,
         request_id="old-request",
         created_at=base_time,
     )
-    tie_first_exchange = add_exchange(
+    tie_first_exchange = _add_exchange(
         db,
         user_id=first_user_id,
         request_id="tie-first-request",
         created_at=base_time + timedelta(minutes=1),
     )
-    tie_second_exchange = add_exchange(
+    tie_second_exchange = _add_exchange(
         db,
         user_id=second_user_id,
         request_id="tie-second-request",
         created_at=base_time + timedelta(minutes=1),
         status="failed",
     )
-    orphan_exchange = add_exchange(
+    orphan_exchange = _add_exchange(
         db,
         user_id=orphan_user_id,
         request_id="orphan-request",
@@ -144,10 +138,12 @@ def test_list_metadata_returns_exact_safe_projection_newest_first_and_keeps_orph
 
 
 def test_list_metadata_never_commits(
-    db: Session, monkeypatch: pytest.MonkeyPatch
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    user_id_factory: Callable[[str], int],
 ) -> None:
-    user_id = add_user(db, "read-only-user")
-    add_exchange(
+    user_id = user_id_factory("read-only-user")
+    _add_exchange(
         db,
         user_id=user_id,
         request_id="read-only-request",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -9,7 +10,6 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth.models import User
 from app.chat.models import ChatExchange
 from app.chat.repository import (
     create_failed_exchange,
@@ -17,13 +17,6 @@ from app.chat.repository import (
     get_recent_success_exchanges,
     list_user_exchanges,
 )
-
-
-def add_user(db: Session, username: str) -> int:
-    user = User(username=username, password_hash="test-hash")
-    db.add(user)
-    db.flush()
-    return user.id
 
 
 def test_create_exchange_functions_flush_expected_states(
@@ -212,8 +205,9 @@ def test_new_sqlite_database_creates_operational_metadata_schema() -> None:
 def test_recent_success_query_filters_user_status_and_limit(
     db: Session,
     user_id: int,
+    user_id_factory: Callable[[str], int],
 ) -> None:
-    other_user_id = add_user(db, "other-user")
+    other_user_id = user_id_factory("other-user")
     base_time = datetime(2026, 8, 6, tzinfo=UTC)
     for index in range(6):
         db.add(
@@ -324,8 +318,9 @@ def test_recent_success_query_rejects_limit_outside_context_contract(
 def test_list_user_exchanges_returns_only_user_history_newest_first(
     db: Session,
     user_id: int,
+    user_id_factory: Callable[[str], int],
 ) -> None:
-    other_user_id = add_user(db, "history-other-user")
+    other_user_id = user_id_factory("history-other-user")
     base_time = datetime(2026, 8, 6, tzinfo=UTC)
     db.add_all(
         [

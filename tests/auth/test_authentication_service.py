@@ -20,6 +20,16 @@ def encoded_password() -> str:
     return hash_password(_PASSWORD)
 
 
+def _save_user(*, db: Session, password_hash: str) -> User:
+    user = create_user(
+        db=db,
+        username="test-user",
+        password_hash=password_hash,
+    )
+    db.commit()
+    return user
+
+
 def test_authenticate_user_returns_user_for_valid_credentials(
     db: Session,
     encoded_password: str,
@@ -86,13 +96,3 @@ def test_authenticate_user_rejects_malformed_stored_hash(db: Session) -> None:
     )
 
     assert authenticated_user is None
-
-
-def _save_user(*, db: Session, password_hash: str) -> User:
-    user = create_user(
-        db=db,
-        username="test-user",
-        password_hash=password_hash,
-    )
-    db.commit()
-    return user

@@ -105,7 +105,7 @@ class FailingReadRepository(SqlAlchemyChatExchangeRepository):
         raise RuntimeError("history item failed")
 
 
-def create_service(db: Session, generator: AnswerGenerator) -> ChatService:
+def _create_service(db: Session, generator: AnswerGenerator) -> ChatService:
     return ChatService(
         db=db,
         repository=SqlAlchemyChatExchangeRepository(db=db),
@@ -155,7 +155,7 @@ def test_validation_error_identifies_the_invalid_rule(
     message: str,
     expected_reason: str,
 ) -> None:
-    service = create_service(db, RecordingGenerator())
+    service = _create_service(db, RecordingGenerator())
 
     with pytest.raises(ChatValidationError) as captured:
         asyncio.run(
@@ -174,7 +174,7 @@ def test_context_read_transaction_ends_before_answer_generation(
     db: Session,
     user_id: int,
 ) -> None:
-    service = create_service(db, TransactionCheckingGenerator(db))
+    service = _create_service(db, TransactionCheckingGenerator(db))
 
     result = asyncio.run(
         service.process_chat(
@@ -264,7 +264,7 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
     )
     db.commit()
     generator = RecordingGenerator(answer="generated answer")
-    service = create_service(db, generator)
+    service = _create_service(db, generator)
     question = "SELECT stack api-key Cookie internal error_message"
     request_id = "success-request"
 
@@ -344,7 +344,7 @@ def test_generation_error_persists_safe_failure_and_propagates(
     error: ChatGenerationError,
     record_message: str,
 ) -> None:
-    service = create_service(db, RecordingGenerator(error=error))
+    service = _create_service(db, RecordingGenerator(error=error))
     request_id = f"failure-request-{record_message}"
 
     with (
@@ -385,7 +385,7 @@ def test_unexpected_generator_error_persists_internal_failure_and_propagates(
     user_id: int,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    service = create_service(db, UnexpectedErrorGenerator())
+    service = _create_service(db, UnexpectedErrorGenerator())
 
     with (
         caplog.at_level("INFO", logger="app.chat.service"),
@@ -428,7 +428,7 @@ def test_success_commit_failure_rolls_back_and_raises_persistence_error(
     db: Session,
     user_id: int,
 ) -> None:
-    service = create_service(db, RecordingGenerator())
+    service = _create_service(db, RecordingGenerator())
 
     def fail_commit() -> None:
         raise RuntimeError("commit failed")
@@ -496,7 +496,7 @@ def test_failed_record_commit_failure_takes_priority_over_generation_error(
     db: Session,
     user_id: int,
 ) -> None:
-    service = create_service(db, RecordingGenerator(error=ChatTimeoutError()))
+    service = _create_service(db, RecordingGenerator(error=ChatTimeoutError()))
 
     def fail_commit() -> None:
         raise RuntimeError("commit failed")
@@ -620,27 +620,24 @@ def test_history_projection_is_user_scoped_and_omits_internal_error(
     assert not hasattr(history[0], "error_message")
 
 
-def test_history_list_read_failure_is_classified_as_non_write_error(
+@pytest.mark.parametrize(
+    ("read_history", "extra_arguments"),
+    [
+        (list_chat_exchange_history, {}),
+        (get_chat_exchange, {"chat_exchange_id": 1}),
+    ],
+)
+def test_history_read_failures_are_classified_as_non_write_errors(
     db: Session,
     user_id: int,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        service_module, "SqlAlchemyChatExchangeRepository", FailingReadRepository
-    )
-
-    _assert_read_failure(lambda: list_chat_exchange_history(user_id=user_id, db=db))
-
-
-def test_single_history_read_failure_is_classified_as_non_write_error(
-    db: Session,
-    user_id: int,
-    monkeypatch: pytest.MonkeyPatch,
+    read_history: Callable[..., object],
+    extra_arguments: dict[str, object],
 ) -> None:
     monkeypatch.setattr(
         service_module, "SqlAlchemyChatExchangeRepository", FailingReadRepository
     )
 
     _assert_read_failure(
-        lambda: get_chat_exchange(user_id=user_id, chat_exchange_id=1, db=db)
+        lambda: read_history(user_id=user_id, db=db, **extra_arguments)
     )

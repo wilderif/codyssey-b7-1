@@ -21,7 +21,7 @@ from app.auth.models import ADMIN_ROLE, USER_ROLE
 from app.auth.repository import create_user
 
 
-def make_request(session: Mapping[str, object]) -> Request:
+def _make_request(session: Mapping[str, object]) -> Request:
     return Request(
         {
             "type": "http",
@@ -35,7 +35,7 @@ def make_request(session: Mapping[str, object]) -> Request:
 
 
 def test_set_session_user_id_replaces_existing_session_data() -> None:
-    request = make_request({"stale": "value", "user_id": 1})
+    request = _make_request({"stale": "value", "user_id": 1})
 
     set_session_user_id(request, user_id=42)
 
@@ -47,7 +47,7 @@ def test_set_session_user_id_replaces_existing_session_data() -> None:
 def test_set_session_user_id_rejects_invalid_id_without_changing_session(
     user_id: int,
 ) -> None:
-    request = make_request({"stale": "value"})
+    request = _make_request({"stale": "value"})
 
     with pytest.raises(ValueError, match="user_id"):
         set_session_user_id(request, user_id=user_id)
@@ -56,7 +56,7 @@ def test_set_session_user_id_rejects_invalid_id_without_changing_session(
 
 
 def test_clear_session_user_id_removes_all_session_data() -> None:
-    request = make_request({"user_id": 42, "stale": "value"})
+    request = _make_request({"user_id": 42, "stale": "value"})
 
     clear_session_user_id(request)
 
@@ -65,7 +65,7 @@ def test_clear_session_user_id_removes_all_session_data() -> None:
 
 
 def test_get_current_user_id_returns_session_user_id() -> None:
-    request = make_request({"user_id": 42})
+    request = _make_request({"user_id": 42})
 
     assert get_current_user_id(request) == 42
 
@@ -85,7 +85,7 @@ def test_get_current_user_id_rejects_invalid_session(
     session: Mapping[str, object],
 ) -> None:
     with pytest.raises(HTTPException) as error:
-        get_current_user_id(make_request(session))
+        get_current_user_id(_make_request(session))
 
     assert error.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert error.value.detail == "로그인이 필요합니다."
@@ -107,7 +107,7 @@ def test_require_authenticated_user_returns_minimal_user_data(
         role=role,
     )
 
-    result = require_authenticated_user(make_request({"user_id": user.id}), db)
+    result = require_authenticated_user(_make_request({"user_id": user.id}), db)
 
     assert result == AuthenticatedUser(
         user_id=user.id,
@@ -120,7 +120,7 @@ def test_require_authenticated_user_clears_stale_session_and_redirects(
     db: Session,
     user_id: object,
 ) -> None:
-    request = make_request({"user_id": user_id, "stale": "value"})
+    request = _make_request({"user_id": user_id, "stale": "value"})
 
     with pytest.raises(HTTPException) as error:
         require_authenticated_user(request, db)
@@ -138,7 +138,7 @@ def test_require_admin_returns_admin_user_id(db: Session) -> None:
         role=ADMIN_ROLE,
     )
 
-    assert require_admin(make_request({"user_id": admin.id}), db) == admin.id
+    assert require_admin(_make_request({"user_id": admin.id}), db) == admin.id
 
 
 def test_require_admin_rejects_non_admin(db: Session) -> None:
@@ -149,7 +149,7 @@ def test_require_admin_rejects_non_admin(db: Session) -> None:
     )
 
     with pytest.raises(HTTPException) as error:
-        require_admin(make_request({"user_id": user.id}), db)
+        require_admin(_make_request({"user_id": user.id}), db)
 
     assert error.value.status_code == status.HTTP_403_FORBIDDEN
     assert error.value.detail == "접근 권한이 없습니다."
@@ -163,7 +163,7 @@ def test_require_admin_redirects_unauthenticated_user(
     session = {} if user_id is None else {"user_id": user_id}
 
     with pytest.raises(HTTPException) as error:
-        require_admin(make_request(session), db)
+        require_admin(_make_request(session), db)
 
     assert error.value.status_code == status.HTTP_303_SEE_OTHER
     assert error.value.headers == {"Location": "/login"}

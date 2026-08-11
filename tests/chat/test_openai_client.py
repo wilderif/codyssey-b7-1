@@ -40,12 +40,12 @@ class FakeCompletions:
         return self.result
 
 
-def create_generator(completions: FakeCompletions) -> OpenAIAnswerGenerator:
+def _create_generator(completions: FakeCompletions) -> OpenAIAnswerGenerator:
     client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
     return OpenAIAnswerGenerator(client=cast(AsyncOpenAI, client), model="test-model")
 
 
-def run_generate(
+def _run_generate(
     generator: OpenAIAnswerGenerator,
     messages: Sequence[ChatMessage] | None = None,
 ) -> str:
@@ -61,10 +61,10 @@ def test_generate_sends_model_and_messages_once() -> None:
         choices=[SimpleNamespace(message=SimpleNamespace(content="answer"))]
     )
     completions = FakeCompletions(result=completion)
-    generator = create_generator(completions)
+    generator = _create_generator(completions)
     messages: list[ChatMessage] = [{"role": "user", "content": "question"}]
 
-    answer = run_generate(generator, messages)
+    answer = _run_generate(generator, messages)
 
     assert answer == "answer"
     assert completions.calls == [{"model": "test-model", "messages": messages}]
@@ -72,22 +72,22 @@ def test_generate_sends_model_and_messages_once() -> None:
 
 def test_generate_maps_timeout_to_chat_timeout() -> None:
     request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
-    generator = create_generator(
+    generator = _create_generator(
         FakeCompletions(error=APITimeoutError(request=request))
     )
 
     with pytest.raises(ChatTimeoutError):
-        run_generate(generator)
+        _run_generate(generator)
 
 
 def test_generate_maps_api_error_to_chat_generation_error() -> None:
     request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
-    generator = create_generator(
+    generator = _create_generator(
         FakeCompletions(error=APIError("api failed", request=request, body=None))
     )
 
     with pytest.raises(ChatGenerationError):
-        run_generate(generator)
+        _run_generate(generator)
 
 
 @pytest.mark.parametrize(
@@ -103,10 +103,10 @@ def test_generate_maps_api_error_to_chat_generation_error() -> None:
     ],
 )
 def test_generate_rejects_response_without_nonblank_text(completion: object) -> None:
-    generator = create_generator(FakeCompletions(result=completion))
+    generator = _create_generator(FakeCompletions(result=completion))
 
     with pytest.raises(ChatInvalidResponseError):
-        run_generate(generator)
+        _run_generate(generator)
 
 
 def test_openai_configuration_rejects_blank_values(

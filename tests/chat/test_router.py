@@ -13,6 +13,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+import app.chat.i18n as i18n_module
+import app.chat.router as router_module
 from app.auth.dependencies import get_current_user_id
 from app.auth.models import User
 from app.chat.errors import (
@@ -29,14 +31,6 @@ from app.core.request_id import REQUEST_ID_HEADER, RequestIdMiddleware
 
 @pytest.fixture
 def app(db: Session) -> Generator[FastAPI, None, None]:
-    from app.chat.router import (
-        app_error_handler,
-        http_exception_handler,
-        router,
-        unhandled_exception_handler,
-        validation_exception_handler,
-    )
-
     application = FastAPI()
 
     @application.middleware("http")
@@ -45,13 +39,17 @@ def app(db: Session) -> Generator[FastAPI, None, None]:
         return await call_next(request)
 
     application.add_middleware(RequestIdMiddleware)
-    application.include_router(router)
+    application.include_router(router_module.router)
     application.add_exception_handler(
-        RequestValidationError, validation_exception_handler
+        RequestValidationError, router_module.validation_exception_handler
     )
-    application.add_exception_handler(AppError, app_error_handler)
-    application.add_exception_handler(HTTPException, http_exception_handler)
-    application.add_exception_handler(Exception, unhandled_exception_handler)
+    application.add_exception_handler(AppError, router_module.app_error_handler)
+    application.add_exception_handler(
+        HTTPException, router_module.http_exception_handler
+    )
+    application.add_exception_handler(
+        Exception, router_module.unhandled_exception_handler
+    )
     application.dependency_overrides[get_db] = lambda: db
     yield application
     application.dependency_overrides.clear()
@@ -62,8 +60,14 @@ def client(app: FastAPI) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def _login(app: FastAPI, user_id: int) -> None:
+@pytest.fixture
+def authenticated_client(
+    app: FastAPI,
+    client: TestClient,
+    user_id: int,
+) -> TestClient:
     app.dependency_overrides[get_current_user_id] = lambda: user_id
+    return client
 
 
 def _add_exchange(
@@ -95,14 +99,10 @@ def _add_exchange(
 
 
 def test_post_chat_returns_contract_and_passes_user_agent(
-    app: FastAPI,
-    client: TestClient,
+    authenticated_client: TestClient,
     user_id: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
     received: dict[str, object] = {}
 
     async def fake_process_chat(**kwargs: object) -> ChatResult:
@@ -115,7 +115,7 @@ def test_post_chat_returns_contract_and_passes_user_agent(
 
     monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/chat",
         json={"message": "question"},
         headers={"user-agent": "router-test/1.0"},
@@ -144,16 +144,11 @@ def test_post_chat_returns_contract_and_passes_user_agent(
     ],
 )
 def test_post_chat_limits_persisted_user_agent_to_database_boundary(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     header_value: str,
     expected_user_agent: str,
 ) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
     received: dict[str, object] = {}
 
     async def fake_process_chat(**kwargs: object) -> ChatResult:
@@ -162,7 +157,7 @@ def test_post_chat_limits_persisted_user_agent_to_database_boundary(
 
     monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/chat",
         json={"message": "question"},
         headers={"user-agent": header_value},
@@ -192,29 +187,21 @@ def test_post_chat_requires_login(client: TestClient) -> None:
     ],
 )
 def test_post_chat_distinguishes_domain_and_request_validation(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
     payload: dict[str, object],
     status_code: int,
     detail: str,
 ) -> None:
-    _login(app, user_id)
-
-    response = client.post("/api/chat", json=payload)
+    response = authenticated_client.post("/api/chat", json=payload)
 
     assert response.status_code == status_code
     assert response.json() == {"code": "validation_error", "detail": detail}
 
 
 def test_post_chat_returns_validation_error_for_malformed_json(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
 ) -> None:
-    _login(app, user_id)
-
-    response = client.post(
+    response = authenticated_client.post(
         "/api/chat",
         content="{",
         headers={"content-type": "application/json"},
@@ -237,24 +224,18 @@ def test_post_chat_returns_validation_error_for_malformed_json(
     ],
 )
 def test_post_chat_returns_safe_error_for_processing_failures(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
     status_code: int,
     code: str,
 ) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
-
     async def failing_process_chat(**_kwargs: object) -> ChatResult:
         raise error
 
     monkeypatch.setattr(router_module, "process_chat", failing_process_chat)
 
-    response = client.post("/api/chat", json={"message": "question"})
+    response = authenticated_client.post("/api/chat", json={"message": "question"})
 
     assert response.status_code == status_code
     assert response.json()["code"] == code
@@ -263,21 +244,15 @@ def test_post_chat_returns_safe_error_for_processing_failures(
 
 
 def test_post_chat_returns_internal_error_for_context_read_failure(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
-
     async def failing_process_chat(**_kwargs: object) -> ChatResult:
         raise ChatPersistenceError(is_write=False)
 
     monkeypatch.setattr(router_module, "process_chat", failing_process_chat)
 
-    response = client.post("/api/chat", json={"message": "question"})
+    response = authenticated_client.post("/api/chat", json={"message": "question"})
 
     assert response.status_code == 500
     assert response.json() == {
@@ -287,23 +262,17 @@ def test_post_chat_returns_internal_error_for_context_read_failure(
 
 
 def test_unhandled_error_log_hides_internal_error_detail(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
-
     async def failing_process_chat(**_kwargs: object) -> ChatResult:
         raise RuntimeError("select * from secret_cookie")
 
     monkeypatch.setattr(router_module, "process_chat", failing_process_chat)
 
     with caplog.at_level("ERROR", logger="app.chat.router"):
-        response = client.post("/api/chat", json={"message": "question"})
+        response = authenticated_client.post("/api/chat", json={"message": "question"})
 
     assert response.status_code == 500
     assert not caplog.records
@@ -312,8 +281,7 @@ def test_unhandled_error_log_hides_internal_error_detail(
 
 
 def test_history_is_isolated_and_hides_operational_metadata(
-    app: FastAPI,
-    client: TestClient,
+    authenticated_client: TestClient,
     db: Session,
     user_id: int,
 ) -> None:
@@ -338,9 +306,7 @@ def test_history_is_isolated_and_hides_operational_metadata(
         status="success",
         request_id="other-history",
     )
-    _login(app, user_id)
-
-    response = client.get("/api/chat-exchanges")
+    response = authenticated_client.get("/api/chat-exchanges")
 
     assert response.status_code == 200
     assert response.json() == [
@@ -358,8 +324,7 @@ def test_history_is_isolated_and_hides_operational_metadata(
 
 
 def test_single_history_hides_other_users_as_not_found(
-    app: FastAPI,
-    client: TestClient,
+    authenticated_client: TestClient,
     db: Session,
     user_id: int,
 ) -> None:
@@ -374,10 +339,8 @@ def test_single_history_hides_other_users_as_not_found(
         status="success",
         request_id="other-single",
     )
-    _login(app, user_id)
-
-    missing = client.get("/api/chat-exchanges/9999")
-    foreign = client.get(f"/api/chat-exchanges/{exchange.id}")
+    missing = authenticated_client.get("/api/chat-exchanges/9999")
+    foreign = authenticated_client.get(f"/api/chat-exchanges/{exchange.id}")
 
     assert missing.status_code == foreign.status_code == 404
     assert (
@@ -392,12 +355,9 @@ def test_single_history_hides_other_users_as_not_found(
 
 def test_single_history_non_integer_id_returns_structured_validation_error(
     app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
 ) -> None:
-    _login(app, user_id)
-
-    response = client.get("/api/chat-exchanges/not-an-integer")
+    response = authenticated_client.get("/api/chat-exchanges/not-an-integer")
     openapi = app.openapi()
     response_schema = openapi["paths"]["/api/chat-exchanges/{chat_exchange_id}"]["get"][
         "responses"
@@ -419,23 +379,17 @@ def test_single_history_non_integer_id_returns_structured_validation_error(
     ],
 )
 def test_history_query_failures_return_internal_error(
-    app: FastAPI,
-    client: TestClient,
-    user_id: int,
+    authenticated_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     path: str,
     service_function: str,
 ) -> None:
-    from app.chat import router as router_module
-
-    _login(app, user_id)
-
     def failing_query(**_kwargs: object) -> object:
         raise ChatPersistenceError(is_write=False)
 
     monkeypatch.setattr(router_module, service_function, failing_query)
 
-    response = client.get(path)
+    response = authenticated_client.get(path)
 
     assert response.status_code == 500
     assert response.json() == {
@@ -488,11 +442,9 @@ def test_error_detail_uses_supported_locale_or_korean_fallback(
 def test_missing_english_translation_key_falls_back_to_korean(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.chat import i18n
-
-    monkeypatch.delitem(i18n._MESSAGES["en"], "openai_api_error")
+    monkeypatch.delitem(i18n_module._MESSAGES["en"], "openai_api_error")
 
     assert (
-        i18n.get_message(key="openai_api_error", accept_language="en")
+        i18n_module.get_message(key="openai_api_error", accept_language="en")
         == "AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요."
     )

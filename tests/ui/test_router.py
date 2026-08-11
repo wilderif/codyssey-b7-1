@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+import app.ui.router as router_module
 from app.auth.models import ADMIN_ROLE, USER_ROLE
 from app.auth.repository import create_user
 from app.auth.service import RegistrationError, RegistrationReason
@@ -20,10 +21,31 @@ from app.chat.service import ChatExchangeHistoryItem
 from app.core.database import get_db
 
 
+class CapturingTemplates:
+    """TemplateResponse 호출 인자와 반환 status를 기록한다."""
+
+    def __init__(self) -> None:
+        self.request: object | None = None
+        self.name = ""
+        self.context: dict[str, object] = {}
+        self.status_code = 200
+
+    def TemplateResponse(
+        self,
+        request: object,
+        name: str,
+        context: dict[str, object],
+        status_code: int = 200,
+    ) -> Response:
+        self.request = request
+        self.name = name
+        self.context = context
+        self.status_code = status_code
+        return HTMLResponse("rendered", status_code=status_code)
+
+
 @pytest.fixture
 def app(db: Session) -> Generator[FastAPI, None, None]:
-    from app.ui.router import router
-
     application = FastAPI()
     application.state.session = {}
 
@@ -32,7 +54,7 @@ def app(db: Session) -> Generator[FastAPI, None, None]:
         request.scope["session"] = application.state.session
         return await call_next(request)
 
-    application.include_router(router)
+    application.include_router(router_module.router)
     application.dependency_overrides[get_db] = lambda: db
     yield application
     application.dependency_overrides.clear()
@@ -87,36 +109,17 @@ def test_get_auth_form_passes_empty_context(
     path: str,
     template_name: str,
 ) -> None:
-    from app.ui import router as router_module
-
-    captured: dict[str, object] = {}
-
-    class CapturingTemplates:
-        def TemplateResponse(
-            self,
-            request: object,
-            name: str,
-            context: dict[str, object],
-            status_code: int = 200,
-        ) -> Response:
-            captured.update(
-                request=request,
-                name=name,
-                context=context,
-                status_code=status_code,
-            )
-            return HTMLResponse("rendered", status_code=status_code)
-
-    monkeypatch.setattr(router_module, "templates", CapturingTemplates())
+    templates = CapturingTemplates()
+    monkeypatch.setattr(router_module, "templates", templates)
 
     response = client.get(path)
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert captured["request"] is not None
-    assert captured["name"] == template_name
-    assert captured["context"] == {"error": None, "username": ""}
-    assert captured["status_code"] == 200
+    assert templates.request is not None
+    assert templates.name == template_name
+    assert templates.context == {"error": None, "username": ""}
+    assert templates.status_code == 200
 
 
 def test_signup_normalizes_username_without_changing_password(
@@ -125,9 +128,6 @@ def test_signup_normalizes_username_without_changing_password(
     db: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.ui import router as router_module
-
-    _set_session(app, {})
     received: dict[str, object] = {}
     raw_password = "  secret-password  "
 
@@ -156,29 +156,14 @@ def test_signup_maps_duplicate_error_to_safe_template_context(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.ui import router as router_module
-
-    captured_context: dict[str, object] = {}
+    templates = CapturingTemplates()
     raw_password = "password-must-not-enter-context"
 
     def reject_registration(**_kwargs: object) -> None:
         raise RegistrationError(RegistrationReason.DUPLICATE_USERNAME)
 
-    class CapturingTemplates:
-        def TemplateResponse(
-            self,
-            request: object,
-            name: str,
-            context: dict[str, object],
-            status_code: int = 200,
-        ) -> Response:
-            assert request is not None
-            assert name == "signup.html"
-            captured_context.update(context)
-            return HTMLResponse("rendered", status_code=status_code)
-
     monkeypatch.setattr(router_module, "register_user", reject_registration)
-    monkeypatch.setattr(router_module, "templates", CapturingTemplates())
+    monkeypatch.setattr(router_module, "templates", templates)
 
     response = client.post(
         "/signup",
@@ -186,11 +171,13 @@ def test_signup_maps_duplicate_error_to_safe_template_context(
     )
 
     assert response.status_code == 400
-    assert captured_context == {
+    assert templates.request is not None
+    assert templates.name == "signup.html"
+    assert templates.context == {
         "error": "이미 사용 중인 아이디입니다.",
         "username": "escaped-user",
     }
-    assert raw_password not in captured_context.values()
+    assert raw_password not in templates.context.values()
 
 
 @pytest.mark.parametrize(
@@ -243,8 +230,6 @@ def test_login_sets_session_and_preserves_password_whitespace(
     db: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.ui import router as router_module
-
     received: dict[str, object] = {}
     raw_password = "  correct-password  "
 
@@ -275,26 +260,11 @@ def test_login_failure_uses_one_safe_message_and_excludes_password_from_context(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.ui import router as router_module
-
-    captured_context: dict[str, object] = {}
+    templates = CapturingTemplates()
     raw_password = "password-must-not-enter-context"
 
-    class CapturingTemplates:
-        def TemplateResponse(
-            self,
-            request: object,
-            name: str,
-            context: dict[str, object],
-            status_code: int = 200,
-        ) -> Response:
-            assert request is not None
-            assert name == "login.html"
-            captured_context.update(context)
-            return HTMLResponse("rendered", status_code=status_code)
-
     monkeypatch.setattr(router_module, "authenticate_user", lambda **_kwargs: None)
-    monkeypatch.setattr(router_module, "templates", CapturingTemplates())
+    monkeypatch.setattr(router_module, "templates", templates)
 
     response = client.post(
         "/login",
@@ -302,11 +272,13 @@ def test_login_failure_uses_one_safe_message_and_excludes_password_from_context(
     )
 
     assert response.status_code == 400
-    assert captured_context == {
+    assert templates.request is not None
+    assert templates.name == "login.html"
+    assert templates.context == {
         "error": "아이디 또는 비밀번호가 올바르지 않습니다.",
         "username": "unknown-user",
     }
-    assert raw_password not in captured_context.values()
+    assert raw_password not in templates.context.values()
 
 
 @pytest.mark.parametrize(
@@ -365,8 +337,6 @@ def test_chat_passes_service_history_in_latest_first_order_and_exact_context(
     db: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.ui import router as router_module
-
     user = create_user(db=db, username="chat-user", password_hash="test-hash")
     db.commit()
     _set_session(app, {"user_id": user.id})
@@ -387,40 +357,30 @@ def test_chat_passes_service_history_in_latest_first_order_and_exact_context(
         ),
     ]
     received: dict[str, object] = {}
-    captured_context: dict[str, object] = {}
+    templates = CapturingTemplates()
 
     def fake_list_chat_exchange_history(**kwargs: object) -> object:
         received.update(kwargs)
         return history
-
-    class CapturingTemplates:
-        def TemplateResponse(
-            self,
-            request: object,
-            name: str,
-            context: dict[str, object],
-        ) -> Response:
-            assert request is not None
-            assert name == "chat.html"
-            captured_context.update(context)
-            return HTMLResponse("rendered")
 
     monkeypatch.setattr(
         router_module,
         "list_chat_exchange_history",
         fake_list_chat_exchange_history,
     )
-    monkeypatch.setattr(router_module, "templates", CapturingTemplates())
+    monkeypatch.setattr(router_module, "templates", templates)
 
     response = client.get("/chat")
 
     assert response.status_code == 200
     assert received == {"user_id": user.id, "db": db}
-    assert captured_context == {
+    assert templates.request is not None
+    assert templates.name == "chat.html"
+    assert templates.context == {
         "chat_exchanges": history,
         "is_admin": False,
     }
-    assert captured_context["chat_exchanges"] is history
+    assert templates.context["chat_exchanges"] is history
 
 
 @pytest.mark.parametrize(
@@ -435,8 +395,6 @@ def test_chat_renders_admin_navigation_only_for_admin(
     role: str,
     expected_admin_navigation: bool,
 ) -> None:
-    from app.ui import router as router_module
-
     user = create_user(
         db=db,
         username=f"{role}-chat-user",
@@ -468,8 +426,6 @@ def test_chat_clears_invalid_session_without_reading_history(
     monkeypatch: pytest.MonkeyPatch,
     session: dict[str, object],
 ) -> None:
-    from app.ui import router as router_module
-
     def fail_if_called(**_kwargs: object) -> object:
         raise AssertionError("history must not be read without an authenticated user")
 
@@ -492,8 +448,6 @@ def test_chat_allows_history_failure_to_reach_global_exception_handling(
     db: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.ui import router as router_module
-
     user = create_user(
         db=db,
         username="failing-chat-user",
