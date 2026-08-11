@@ -41,6 +41,7 @@ redirect, request와 response schema는 [API 계약](../api/API.md)을 따릅니
 ### `/signup`
 
 - `signup.html`에 username·password form과 Login 화면 link를 rendering합니다.
+- 유효한 login session으로 접근하면 form을 rendering하지 않고 `/chat`으로 `303` 이동합니다.
 - Form은 같은 경로로 제출합니다. 성공 시 Browser는 Login 화면으로 이동하고, 입력 오류 시 같은
   화면에 안전한 message를 표시합니다.
 - Template context와 `RegistrationReason`별 message는
@@ -49,6 +50,7 @@ redirect, request와 response schema는 [API 계약](../api/API.md)을 따릅니
 ### `/login`
 
 - `login.html`에 username·password form과 회원가입 화면 link를 rendering합니다.
+- 유효한 login session으로 접근하면 form을 rendering하지 않고 `/chat`으로 `303` 이동합니다.
 - Form은 같은 경로로 제출합니다. 성공 시 Browser는 Chat 화면으로 이동하고, 인증 실패 시 같은
   화면에 안전한 message를 표시합니다.
 - Template context는 [API 계약의 form contract](../api/API.md#form-request와-template-context)를
@@ -302,6 +304,7 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 
 - [ ] `/`가 인증 상태에 맞는 화면으로 이동함
 - [ ] 회원가입 성공은 `/login`, 일반 사용자·관리자 Login 성공은 `/chat`으로 이동함
+- [ ] 로그인 사용자의 `/login`·`/signup` 접근은 `/chat`으로 이동하고 stale session은 form을 표시함
 - [ ] 회원가입·Login 오류가 같은 화면에 안전하게 표시되고 password가 다시 채워지지 않음
 - [ ] 비로그인 사용자의 보호 화면 접근과 일반 사용자의 `/admin/logs` 접근이 계약대로 차단됨
 
@@ -325,5 +328,6 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 - [ ] 질문·답변·내부 오류·민감정보가 관리자 DOM에 포함되지 않음
 - [ ] `/chat`에서 관리자에게만 `관리자 운영 기록` button이 표시됨
 - [ ] 보호 화면에서 Logout할 수 있고 관리자 화면에서 `/chat`으로 이동할 수 있음
+- [ ] Login·Logout 후 뒤로가기로 BFCache 화면이 복원되면 server가 session을 다시 확인함
 - [ ] 360px mobile 화면에서 form을 사용할 수 있고 table을 가로 scroll할 수 있음
 - [ ] Keyboard만으로 주요 action을 실행하고 Loading·오류 상태를 보조 기술로 확인할 수 있음

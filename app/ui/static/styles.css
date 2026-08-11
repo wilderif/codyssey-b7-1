@@ -53,6 +53,11 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Hide a restored page while its authentication state is revalidated. */
+.page-revalidating body {
+  visibility: hidden;
+}
+
 /* Style standard text links. */
 a {
   color: var(--color-primary);

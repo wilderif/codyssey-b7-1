@@ -114,6 +114,7 @@ def test_admin_logs_renders_safe_metadata_for_admin(
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
     for value in (
         "12",
         "34",
@@ -188,6 +189,7 @@ def test_admin_logs_renders_shared_layout_and_navigation(
     response = admin_client.get("/admin/logs")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     assert '<link rel="stylesheet" href="/static/styles.css">' in response.text
     assert (
         '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">'
@@ -304,6 +306,7 @@ def test_admin_logs_returns_safe_html_error_for_admin_read_error(
 
     assert response.status_code == 500
     assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
     assert response.text == "서버 오류가 발생했습니다."
     assert sensitive_error not in response.text
 

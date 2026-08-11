@@ -161,6 +161,7 @@ from app.auth.dependencies import (
     AuthenticatedUser,
     clear_session_user_id,
     get_current_user_id,
+    get_optional_authenticated_user,
     get_session_user_id,
     require_authenticated_user,
     require_admin,
@@ -176,6 +177,7 @@ def set_session_user_id(request: Request, *, user_id: int) -> None: ...
 def get_session_user_id(request: Request) -> int | None: ...
 def clear_session_user_id(request: Request) -> None: ...
 def get_current_user_id(request: Request) -> int: ...
+def get_optional_authenticated_user(...) -> AuthenticatedUser | None: ...
 def require_authenticated_user(...) -> AuthenticatedUser: ...
 def require_admin(...): ...
 ```
@@ -203,10 +205,12 @@ class AuthenticatedUser:
   UI Router는 session key를 직접 읽거나 쓰지 않고, login 인증 성공과 logout 요청에서 이 helper를
   호출합니다.
 - `get_current_user_id()`는 JSON API가 login 사용자 ID를 얻는 public dependency입니다.
+- `get_optional_authenticated_user()`는 session의 사용자 ID를 실제 `users` record와 대조해 유효한
+  `AuthenticatedUser` 또는 `None`을 반환하고, 형식이 잘못됐거나 대응 User가 없는 stale session은
+  제거합니다. Login·회원가입 화면은 이 결과로 로그인 사용자를 `/chat`으로 이동시킵니다.
 - `require_authenticated_user()`는 HTML 보호 화면이 사용하는 Auth-owned public dependency입니다.
-  Session의 사용자 ID를 실제 `users` record와 대조하고, `user_id`와 `is_admin`만 포함한
-  `AuthenticatedUser`를 반환합니다. Session 값이 없거나 유효하지 않거나 대응 User가 없으면 stale
-  session을 제거하고 `303 /login`으로 이동시킵니다.
+  Optional dependency를 재사용해 `user_id`와 `is_admin`만 포함한 `AuthenticatedUser`를 반환합니다.
+  유효한 사용자가 없으면 `303 /login`으로 이동시킵니다.
 - `require_admin()`은 관리자 HTML 화면이 사용하는 public dependency이며 User 조회와 역할 판별을
   Auth module 안에서 수행합니다.
 - `AuthenticatedUser`는 UI용 최소 read model이며 ORM `User`, username, `role` 원문이나

@@ -5,15 +5,16 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
-from fastapi.templating import Jinja2Templates
 
 from app.chat.service import ChatExchangeHistoryItem
+from app.ui.templating import templates
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TEMPLATE_DIRECTORY = PROJECT_ROOT / "app" / "ui" / "templates"
 STYLES_PATH = PROJECT_ROOT / "app" / "ui" / "static" / "styles.css"
 CHAT_SCRIPT_PATH = PROJECT_ROOT / "app" / "ui" / "static" / "chat.js"
-templates = Jinja2Templates(directory=str(TEMPLATE_DIRECTORY))
+PAGE_LIFECYCLE_SCRIPT_PATH = (
+    PROJECT_ROOT / "app" / "ui" / "static" / "page-lifecycle.js"
+)
 
 
 class StartTagCollector(HTMLParser):
@@ -80,6 +81,7 @@ def test_base_template_defines_shared_document_foundation() -> None:
         'name="viewport" content="width=device-width, initial-scale=1"',
         "<title>Codyssey</title>",
         '<link rel="stylesheet" href="/static/styles.css">',
+        '<script src="/static/page-lifecycle.js" defer></script>',
         '<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>',
     ):
         assert expected_markup in html
@@ -526,6 +528,18 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
         width_rule in responsive_styles
         for width_rule in ("width: 100%", "max-width: 100%", "min-width: 0")
     )
+
+
+def test_page_lifecycle_script_revalidates_bfcache_restores() -> None:
+    script = PAGE_LIFECYCLE_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    for expected_contract in (
+        'window.addEventListener("pageshow"',
+        "event.persisted",
+        'classList.add("page-revalidating")',
+        "window.location.reload()",
+    ):
+        assert expected_contract in script
 
 
 def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:

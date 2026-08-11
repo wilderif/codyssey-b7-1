@@ -65,15 +65,27 @@ def require_authenticated_user(
 ) -> AuthenticatedUser:
     """보호된 HTML 화면에 유효한 login 사용자 정보를 제공한다."""
 
+    authenticated_user = get_optional_authenticated_user(request, db)
+    if authenticated_user is None:
+        raise _login_redirect()
+    return authenticated_user
+
+
+def get_optional_authenticated_user(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> AuthenticatedUser | None:
+    """유효한 login 사용자를 반환하고 stale session은 제거한다."""
+
     user_id = get_session_user_id(request)
     if user_id is None:
         clear_session_user_id(request)
-        raise _login_redirect()
+        return None
 
     user = get_user_by_id(db=db, user_id=user_id)
     if user is None:
         clear_session_user_id(request)
-        raise _login_redirect()
+        return None
 
     return AuthenticatedUser(
         user_id=user.id,
@@ -87,23 +99,19 @@ def require_admin(
 ) -> int:
     """관리자 화면 접근을 허용하고 login 사용자 ID를 반환한다."""
 
-    user_id = get_session_user_id(request)
-    if user_id is None:
+    authenticated_user = get_optional_authenticated_user(request, db)
+    if authenticated_user is None:
         raise _login_redirect()
-
-    user = get_user_by_id(db=db, user_id=user_id)
-    if user is None:
-        raise _login_redirect()
-    if user.role != ADMIN_ROLE:
+    if not authenticated_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="접근 권한이 없습니다.",
         )
-    return user_id
+    return authenticated_user.user_id
 
 
 def _login_redirect() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_303_SEE_OTHER,
-        headers={"Location": "/login"},
+        headers={"Location": "/login", "Cache-Control": "no-store"},
     )

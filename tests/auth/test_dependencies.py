@@ -12,6 +12,7 @@ from app.auth.dependencies import (
     AuthenticatedUser,
     clear_session_user_id,
     get_current_user_id,
+    get_optional_authenticated_user,
     get_session_user_id,
     require_admin,
     require_authenticated_user,
@@ -115,6 +116,44 @@ def test_require_authenticated_user_returns_minimal_user_data(
     )
 
 
+@pytest.mark.parametrize(
+    ("role", "expected_is_admin"),
+    [(USER_ROLE, False), (ADMIN_ROLE, True)],
+)
+def test_get_optional_authenticated_user_returns_minimal_user_data(
+    db: Session,
+    role: str,
+    expected_is_admin: bool,
+) -> None:
+    user = create_user(
+        db=db,
+        username=f"optional-{role}-user",
+        password_hash="test-hash",
+        role=role,
+    )
+
+    result = get_optional_authenticated_user(
+        _make_request({"user_id": user.id}),
+        db,
+    )
+
+    assert result == AuthenticatedUser(
+        user_id=user.id,
+        is_admin=expected_is_admin,
+    )
+
+
+@pytest.mark.parametrize("user_id", [None, "1", True, 0, -1, 999])
+def test_get_optional_authenticated_user_clears_stale_session(
+    db: Session,
+    user_id: object,
+) -> None:
+    request = _make_request({"user_id": user_id, "stale": "value"})
+
+    assert get_optional_authenticated_user(request, db) is None
+    assert request.session == {}
+
+
 @pytest.mark.parametrize("user_id", [None, "1", True, 0, -1, 999])
 def test_require_authenticated_user_clears_stale_session_and_redirects(
     db: Session,
@@ -127,7 +166,10 @@ def test_require_authenticated_user_clears_stale_session_and_redirects(
 
     assert request.session == {}
     assert error.value.status_code == status.HTTP_303_SEE_OTHER
-    assert error.value.headers == {"Location": "/login"}
+    assert error.value.headers == {
+        "Location": "/login",
+        "Cache-Control": "no-store",
+    }
 
 
 def test_require_admin_returns_admin_user_id(db: Session) -> None:
@@ -160,10 +202,14 @@ def test_require_admin_redirects_unauthenticated_user(
     db: Session,
     user_id: int | None,
 ) -> None:
-    session = {} if user_id is None else {"user_id": user_id}
+    request = _make_request({} if user_id is None else {"user_id": user_id})
 
     with pytest.raises(HTTPException) as error:
-        require_admin(_make_request(session), db)
+        require_admin(request, db)
 
+    assert request.session == {}
     assert error.value.status_code == status.HTTP_303_SEE_OTHER
-    assert error.value.headers == {"Location": "/login"}
+    assert error.value.headers == {
+        "Location": "/login",
+        "Cache-Control": "no-store",
+    }
