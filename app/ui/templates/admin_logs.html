@@ -14,12 +14,12 @@
     </p>
 
     {# Navigation back to Chat and the POST-only Logout action. #}
-    <nav class="admin-nav" aria-label="주요 메뉴">
-      <a class="admin-nav__link" href="/chat">Chat으로 돌아가기</a>
-      <form class="admin-nav__logout" method="post" action="/logout">
-        <button type="submit">Logout</button>
-      </form>
-    </nav>
+    {% set protected_nav = {
+      "variant": "admin",
+      "link_href": "/chat",
+      "link_label": "Chat으로 돌아가기"
+    } %}
+    {% include "_protected_nav.html" %}
   </header>
 
   {# Scrollable operational log table when records are available. #}

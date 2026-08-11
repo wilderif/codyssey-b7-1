@@ -14,14 +14,12 @@
       </div>
 
       {# Admin access is conditional while Logout remains POST-only. #}
-      <nav class="chat-nav" aria-label="주요 메뉴">
-        {% if is_admin %}
-        <a class="chat-nav__link" href="/admin/logs">관리자 운영 기록</a>
-        {% endif %}
-        <form class="chat-nav__logout" method="post" action="/logout">
-          <button class="chat-nav__button" type="submit">Logout</button>
-        </form>
-      </nav>
+      {% set protected_nav = {
+        "variant": "chat",
+        "link_href": "/admin/logs" if is_admin else none,
+        "link_label": "관리자 운영 기록"
+      } %}
+      {% include "_protected_nav.html" %}
     </div>
   </header>
 

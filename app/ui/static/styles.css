@@ -275,9 +275,8 @@ button:disabled {
   color: var(--color-muted);
 }
 
-/* Share navigation alignment across protected pages. */
-.chat-nav,
-.admin-nav {
+/* Share navigation alignment across authenticated pages. */
+.protected-nav {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -285,18 +284,17 @@ button:disabled {
 }
 
 /* Align Chat actions to the right on wide screens. */
-.chat-nav {
+.protected-nav--chat {
   justify-content: flex-end;
 }
 
 /* Allow Admin actions to wrap when needed. */
-.admin-nav {
+.protected-nav--admin {
   flex-wrap: wrap;
 }
 
 /* Present protected-page links as secondary buttons. */
-.chat-nav__link,
-.admin-nav__link {
+.protected-nav__link {
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
@@ -313,15 +311,13 @@ button:disabled {
 }
 
 /* Fill protected-page navigation links on hover. */
-.chat-nav__link:hover,
-.admin-nav__link:hover {
+.protected-nav__link:hover {
   background: var(--color-primary);
   color: #ffffff;
 }
 
 /* Remove default margins from logout forms. */
-.chat-nav__logout,
-.admin-nav__logout {
+.protected-nav__logout {
   margin: 0;
 }
 
@@ -670,29 +666,25 @@ button:disabled {
   }
 
   /* Stretch and wrap protected-page navigation. */
-  .chat-nav,
-  .admin-nav {
+  .protected-nav {
     align-items: stretch;
     flex-wrap: wrap;
   }
 
   /* Align wrapped Chat actions to the start edge. */
-  .chat-nav {
+  .protected-nav--chat {
     justify-content: flex-start;
   }
 
   /* Give each navigation action usable mobile width. */
-  .chat-nav__link,
-  .chat-nav__logout,
-  .admin-nav__link,
-  .admin-nav__logout {
+  .protected-nav__link,
+  .protected-nav__logout {
     min-width: 0;
     flex: 1 1 8rem;
   }
 
   /* Stretch logout buttons across their form. */
-  .chat-nav__logout button,
-  .admin-nav__logout button {
+  .protected-nav__logout button {
     width: 100%;
   }
 

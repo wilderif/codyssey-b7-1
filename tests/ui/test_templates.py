@@ -301,7 +301,7 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         'Accept: "application/json"',
         '"Content-Type": "application/json"',
         'credentials: "same-origin"',
-        "JSON.stringify({ message: submittedQuestion })",
+        "body: JSON.stringify({ message:",
     ):
         assert request_contract in script
 
@@ -470,7 +470,8 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     for expected_selector in (
         ".chat-page",
         ".chat-header__inner",
-        ".chat-nav",
+        ".protected-nav",
+        ".protected-nav--chat",
         ".chat-main",
         ".chat-history",
         ".chat-exchange",
@@ -514,7 +515,11 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     responsive_styles = styles[styles.index("@media (max-width:") :]
     assert any(
         selector in responsive_styles
-        for selector in (".chat-header__inner", ".chat-nav", ".chat-form__actions")
+        for selector in (
+            ".chat-header__inner",
+            ".protected-nav",
+            ".chat-form__actions",
+        )
     )
     assert any(
         width_rule in responsive_styles
@@ -530,9 +535,9 @@ def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
         ".admin-main",
         ".admin-header",
         ".admin-header__description",
-        ".admin-nav",
-        ".admin-nav__link",
-        ".admin-nav__logout",
+        ".protected-nav--admin",
+        ".protected-nav__link",
+        ".protected-nav__logout",
         ".admin-table-container",
         ".admin-table-container:focus-visible",
         ".admin-table",
@@ -581,7 +586,7 @@ def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
 
     assert body is not None
     assert main is not None
-    assert chat_link["class"] == "admin-nav__link"
+    assert chat_link["class"] == "protected-nav__link"
     assert logout_form["method"] == "post"
     assert "Chat으로 돌아가기" in html
     assert "<title>관리자 운영 기록 | Codyssey</title>" in html

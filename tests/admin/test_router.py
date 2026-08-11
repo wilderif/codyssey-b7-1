@@ -215,8 +215,8 @@ def test_admin_logs_renders_shared_layout_and_navigation(
     assert response.status_code == 200
     assert '<link rel="stylesheet" href="/static/styles.css">' in response.text
     assert '<a class="skip-link" href="#main-content">' in response.text
-    assert '<a class="admin-nav__link" href="/chat">' in response.text
-    assert '<form class="admin-nav__logout" method="post" action="/logout">' in (
+    assert '<a class="protected-nav__link" href="/chat">' in response.text
+    assert '<form class="protected-nav__logout" method="post" action="/logout">' in (
         response.text
     )
 

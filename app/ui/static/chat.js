@@ -125,6 +125,21 @@
     characterCount.value = `${messageInput.value.length} / ${MAX_MESSAGE_LENGTH}`;
   }
 
+  // Return one normalized question or report its client-side validation error.
+  function validateQuestion() {
+    const question = messageInput.value.trim();
+    if (question.length === 0) {
+      setFormError("질문을 입력해주세요.");
+      return null;
+    }
+    if (question.length > MAX_MESSAGE_LENGTH) {
+      setFormError("질문은 1000자 이하로 입력해주세요.");
+      return null;
+    }
+
+    return question;
+  }
+
   // Submit with Desktop Enter while preserving multiline and IME composition.
   function handleMessageKeydown(event) {
     const isComposing = event.isComposing || event.keyCode === 229;
@@ -172,6 +187,16 @@
     return { exchange, responseElement, timeElement };
   }
 
+  // Clear the submitted draft, lock duplicate sends, and show its pending item.
+  function startSubmission(question) {
+    setFormError();
+    messageInput.value = "";
+    updateCharacterCount();
+    isSubmitting = true;
+    submitButton.disabled = true;
+    return createPendingExchange(question);
+  }
+
   // Replace a pending exchange with the validated server answer.
   function renderSuccess(pendingExchange, result) {
     const keepLatestVisible = isHistoryNearBottom();
@@ -213,6 +238,47 @@
     messageInput.focus();
   }
 
+  // Send one question and parse the response body within the same error boundary.
+  async function requestChat(question) {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ message: question }),
+    });
+    const payload = await response.json();
+    return { response, payload };
+  }
+
+  // Render a validated success or safe failure and report authentication redirects.
+  function handleChatResponse(pendingExchange, response, payload) {
+    if (response.ok) {
+      const result = parseSuccessPayload(payload);
+      if (result === null) {
+        renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
+      } else {
+        renderSuccess(pendingExchange, result);
+      }
+      return false;
+    }
+
+    const error = parseErrorPayload(payload);
+    if (error?.code === "not_authenticated") {
+      window.location.assign("/login");
+      return true;
+    }
+
+    const message =
+      error !== null && DISPLAYABLE_ERROR_CODES.has(error.code)
+        ? error.detail
+        : GENERIC_ERROR_MESSAGE;
+    renderFailure(pendingExchange, message);
+    return false;
+  }
+
   // Run the validation, request, rendering, and recovery phases in order.
   async function handleSubmit(event) {
     // Keep the browser from replacing the server-rendered page.
@@ -223,66 +289,17 @@
       return;
     }
 
-    // Trimmed copy sent to the API and rendered in the timeline.
-    const submittedQuestion = messageInput.value.trim();
-
-    // Reject empty or oversized questions before changing the draft.
-    if (submittedQuestion.length === 0) {
-      setFormError("질문을 입력해주세요.");
-      return;
-    }
-    if (submittedQuestion.length > MAX_MESSAGE_LENGTH) {
-      setFormError("질문은 1000자 이하로 입력해주세요.");
+    const submittedQuestion = validateQuestion();
+    if (submittedQuestion === null) {
       return;
     }
 
-    // Clear the accepted draft and lock the form for one request.
-    setFormError();
-    messageInput.value = "";
-    updateCharacterCount();
-    isSubmitting = true;
-    submitButton.disabled = true;
+    const pendingExchange = startSubmission(submittedQuestion);
 
-    // Optimistic exchange kept stable through success or failure rendering.
-    const pendingExchange = createPendingExchange(submittedQuestion);
-
-    // Send the accepted question and render only validated response data.
     try {
-      // Same-origin API response for the active Chat Session.
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({ message: submittedQuestion }),
-      });
-      // Unknown JSON payload validated before any fields are trusted.
-      const payload = await response.json();
-
-      if (response.ok) {
-        // Normalized success result or null for a malformed payload.
-        const result = parseSuccessPayload(payload);
-        if (result === null) {
-          renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
-        } else {
-          renderSuccess(pendingExchange, result);
-        }
-      } else {
-        // Validated API error or null for an unexpected error shape.
-        const error = parseErrorPayload(payload);
-        if (error?.code === "not_authenticated") {
-          window.location.assign("/login");
-          return;
-        }
-
-        // Whitelisted server detail or the generic safe fallback.
-        const message =
-          error !== null && DISPLAYABLE_ERROR_CODES.has(error.code)
-            ? error.detail
-            : GENERIC_ERROR_MESSAGE;
-        renderFailure(pendingExchange, message);
+      const { response, payload } = await requestChat(submittedQuestion);
+      if (handleChatResponse(pendingExchange, response, payload)) {
+        return;
       }
     } catch {
       renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
