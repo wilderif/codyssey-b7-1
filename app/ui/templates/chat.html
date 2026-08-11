@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{# Authenticated Chat page with history and composer interactions. #}
 
 {% block page_title %}Chat | Codyssey{% endblock %}
 
 {% block content %}
 <div class="chat-page">
+  {# Page heading and authenticated account navigation. #}
   <header class="chat-header">
     <div class="chat-header__inner">
       <div>
@@ -11,6 +13,7 @@
         <p class="chat-header__description">이전 대화를 확인하고 새로운 질문을 보내세요.</p>
       </div>
 
+      {# Admin access is conditional while Logout remains POST-only. #}
       <nav class="chat-nav" aria-label="주요 메뉴">
         {% if is_admin %}
         <a class="chat-nav__link" href="/admin/logs">관리자 운영 기록</a>
@@ -23,12 +26,14 @@
   </header>
 
   <main id="main-content" class="chat-main">
+    {# Existing exchanges rendered in chronological reading order. #}
     <section
       id="chat-history"
       class="chat-history"
       aria-label="대화 기록"
     >
       {% if chat_exchanges %}
+        {# The Service returns newest-first records, so reverse them for display. #}
         {% for exchange in chat_exchanges | reverse %}
         <article
           class="chat-exchange{% if exchange.status == 'failed' %} chat-exchange--failed{% endif %}"
@@ -41,6 +46,7 @@
 
           <div class="chat-message chat-message--assistant">
             <p class="chat-message__label">AI</p>
+            {# Failed exchanges expose a safe message instead of an answer. #}
             {% if exchange.status == "failed" %}
             <p class="chat-message__content" data-chat-response role="alert">답변을 생성하지 못했습니다.</p>
             {% else %}
@@ -55,28 +61,31 @@
         </article>
         {% endfor %}
       {% else %}
+      {# Initial state before the user has sent any questions. #}
       <p id="chat-empty-state" class="chat-empty-state">아직 대화 기록이 없습니다.</p>
       {% endif %}
     </section>
 
+    {# New-question composer controlled by the Chat JavaScript module. #}
     <section class="chat-composer" aria-labelledby="chat-composer-heading">
       <h2 id="chat-composer-heading">질문 보내기</h2>
       <form id="chat-form" class="chat-form" novalidate>
-        <div class="chat-form__field">
+        <div class="form-field">
           <label for="chat-message">질문</label>
           <textarea
             id="chat-message"
             name="message"
             rows="4"
-            required
             maxlength="1000"
+            required
             aria-describedby="chat-form-error"
           ></textarea>
         </div>
 
+        {# Accessible validation and request failure feedback. #}
         <p
           id="chat-form-error"
-          class="chat-form__error"
+          class="form-error"
           role="alert"
           hidden
         ></p>
@@ -87,6 +96,7 @@
       </form>
     </section>
 
+    {# Client-side pending exchange cloned during request processing. #}
     <template id="chat-pending-template">
       <article class="chat-exchange chat-exchange--pending">
         <div class="chat-message chat-message--user">
@@ -107,5 +117,6 @@
     </template>
   </main>
 </div>
+{# Page-specific behavior loaded after the Chat markup. #}
 <script src="/static/chat.js" defer></script>
 {% endblock %}

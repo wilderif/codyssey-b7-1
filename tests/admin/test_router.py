@@ -188,6 +188,38 @@ def test_admin_logs_renders_semantic_table_contract(
     assert response.text.count('scope="col"') == 9
 
 
+def test_admin_logs_renders_shared_layout_and_navigation(
+    app: FastAPI,
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.admin import router as router_module
+
+    admin = create_user(
+        db=db,
+        username="admin-user",
+        password_hash="test-hash",
+        role=ADMIN_ROLE,
+    )
+    _log_in(app, admin.id)
+    monkeypatch.setattr(
+        router_module,
+        "list_admin_chat_operation_metadata",
+        lambda *, db: [],
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
+    assert '<link rel="stylesheet" href="/static/styles.css">' in response.text
+    assert '<a class="skip-link" href="#main-content">' in response.text
+    assert '<a class="admin-nav__link" href="/chat">' in response.text
+    assert '<form class="admin-nav__logout" method="post" action="/logout">' in (
+        response.text
+    )
+
+
 def test_admin_logs_returns_safe_html_error_for_admin_read_error(
     app: FastAPI,
     client: TestClient,

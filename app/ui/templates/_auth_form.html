@@ -1,0 +1,58 @@
+{# Shared authentication form used by Login and signup pages. #}
+<main id="main-content" class="page-shell">
+  <section class="auth-card" aria-labelledby="{{ auth_form.name }}-heading">
+    {# Page heading and supporting copy. #}
+    <header class="auth-card__header">
+      <p class="auth-card__eyebrow">Codyssey</p>
+      <h1 id="{{ auth_form.name }}-heading">{{ auth_form.heading }}</h1>
+      <p class="auth-card__description">{{ auth_form.description }}</p>
+    </header>
+
+    {# Credentials submitted to the configured authentication endpoint. #}
+    <form class="auth-form" method="post" action="/{{ auth_form.name }}">
+      {# Server-side validation feedback shared by both fields. #}
+      {% if error %}
+      <p id="{{ auth_form.name }}-error" class="form-error" role="alert">{{ error }}</p>
+      {% endif %}
+
+      {# Username input preserves only the safe server-provided value. #}
+      <div class="form-field">
+        <label for="{{ auth_form.name }}-username">아이디</label>
+        <input
+          id="{{ auth_form.name }}-username"
+          name="username"
+          type="text"
+          value="{{ username }}"
+          autocomplete="username"
+          {% if auth_form.username_minlength %}minlength="{{ auth_form.username_minlength }}"{% endif %}
+          maxlength="30"
+          required
+          {% if error %}aria-describedby="{{ auth_form.name }}-error"{% endif %}
+        >
+      </div>
+
+      {# Password input is intentionally never repopulated. #}
+      <div class="form-field">
+        <label for="{{ auth_form.name }}-password">비밀번호</label>
+        <input
+          id="{{ auth_form.name }}-password"
+          name="password"
+          type="password"
+          autocomplete="{{ auth_form.password_autocomplete }}"
+          {% if auth_form.password_minlength %}minlength="{{ auth_form.password_minlength }}"{% endif %}
+          maxlength="72"
+          required
+          {% if error %}aria-describedby="{{ auth_form.name }}-error"{% endif %}
+        >
+      </div>
+
+      {# Primary form action. #}
+      <button type="submit">{{ auth_form.submit_label }}</button>
+    </form>
+
+    {# Alternate path between Login and signup. #}
+    <p class="auth-card__alternative">
+      {{ auth_form.alternative_text }} <a href="{{ auth_form.alternative_href }}">{{ auth_form.alternative_label }}</a>
+    </p>
+  </section>
+</main>

@@ -1,65 +1,76 @@
-<!doctype html>
-<html lang="ko">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>관리자 운영 기록</title>
-  </head>
-  <body class="admin-page">
-    <main id="main-content" class="admin-main">
-      <header class="admin-header">
-        <h1>관리자 운영 기록</h1>
-        <p class="admin-header__description">
-          Chat 요청별 운영 metadata를 최신순으로 확인합니다.
-        </p>
-      </header>
+{% extends "base.html" %}
+{# Administrative log page for reviewing Chat request metadata. #}
 
-      {% if items %}
-      <div
-        class="admin-table-container"
-        role="region"
-        aria-labelledby="admin-table-caption"
-        tabindex="0"
-      >
-        <table class="admin-table">
-          <caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>
-          <thead>
-            <tr>
-              <th scope="col">user_id</th>
-              <th scope="col">username</th>
-              <th scope="col">chat_exchange_id</th>
-              <th scope="col">created_at</th>
-              <th scope="col">request_id</th>
-              <th scope="col">user_agent</th>
-              <th scope="col">response_time_ms</th>
-              <th scope="col">status</th>
-              <th scope="col">error_code</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in items %}
-            <tr>
-              <td>{{ item.user_id }}</td>
-              <td>{{ item.username if item.username is not none else "-" }}</td>
-              <td>{{ item.chat_exchange_id }}</td>
-              <td>
-                <time datetime="{{ item.created_at.isoformat() }}">
-                  {{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC
-                </time>
-              </td>
-              <td>{{ item.request_id }}</td>
-              <td>{{ item.user_agent if item.user_agent is not none else "-" }}</td>
-              <td>{{ item.response_time_ms }}</td>
-              <td>{{ item.status }}</td>
-              <td>{{ item.error_code if item.error_code is not none else "-" }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <p class="admin-empty-state">표시할 운영 기록이 없습니다.</p>
-      {% endif %}
-    </main>
-  </body>
-</html>
+{% block page_title %}관리자 운영 기록 | Codyssey{% endblock %}
+{% block body_class %} class="admin-page"{% endblock %}
+
+{% block content %}
+<main id="main-content" class="admin-main">
+  {# Page introduction and account navigation. #}
+  <header class="admin-header">
+    <h1>관리자 운영 기록</h1>
+    <p class="admin-header__description">
+      Chat 요청별 운영 metadata를 최신순으로 확인합니다.
+    </p>
+
+    {# Navigation back to Chat and the POST-only Logout action. #}
+    <nav class="admin-nav" aria-label="주요 메뉴">
+      <a class="admin-nav__link" href="/chat">Chat으로 돌아가기</a>
+      <form class="admin-nav__logout" method="post" action="/logout">
+        <button type="submit">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  {# Scrollable operational log table when records are available. #}
+  {% if items %}
+  <div
+    class="admin-table-container"
+    role="region"
+    aria-labelledby="admin-table-caption"
+    tabindex="0"
+  >
+    <table class="admin-table">
+      <caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>
+      {# Stable public column order for the nine-field projection. #}
+      <thead>
+        <tr>
+          <th scope="col">user_id</th>
+          <th scope="col">username</th>
+          <th scope="col">chat_exchange_id</th>
+          <th scope="col">created_at</th>
+          <th scope="col">request_id</th>
+          <th scope="col">user_agent</th>
+          <th scope="col">response_time_ms</th>
+          <th scope="col">status</th>
+          <th scope="col">error_code</th>
+        </tr>
+      </thead>
+      <tbody>
+        {# One fixed nine-field projection per Chat request. #}
+        {% for item in items %}
+        <tr>
+          <td>{{ item.user_id }}</td>
+          <td>{{ item.username if item.username is not none else "-" }}</td>
+          <td>{{ item.chat_exchange_id }}</td>
+          <td>
+            <time datetime="{{ item.created_at.isoformat() }}">
+              {{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC
+            </time>
+          </td>
+          <td>{{ item.request_id }}</td>
+          <td>{{ item.user_agent if item.user_agent is not none else "-" }}</td>
+          <td>{{ item.response_time_ms }}</td>
+          <td>{{ item.status }}</td>
+          <td>{{ item.error_code if item.error_code is not none else "-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  {# Empty state for administrators with no recorded requests. #}
+  <p class="admin-empty-state">표시할 운영 기록이 없습니다.</p>
+  {% endif %}
+</main>
+{% endblock %}

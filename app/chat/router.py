@@ -12,7 +12,7 @@ from fastapi.exception_handlers import (
     request_validation_exception_handler as default_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user_id
@@ -171,7 +171,9 @@ async def unhandled_exception_handler(request: Request, _error: Exception) -> Re
     """예상하지 못한 예외를 안전한 내부 오류로 변환한다."""
 
     if not request.url.path.startswith("/api/"):
-        raise _error
+        response = HTMLResponse("서버 오류가 발생했습니다.", status_code=500)
+        response.headers[REQUEST_ID_HEADER] = get_request_id(request)
+        return response
     response = _error_response(
         request=request,
         status_code=500,

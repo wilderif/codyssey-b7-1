@@ -1,4 +1,6 @@
+/* Define the shared light-theme design tokens. */
 :root {
+  /* Color palette. */
   color-scheme: light;
   --color-background: #f4f6fb;
   --color-surface: #ffffff;
@@ -11,15 +13,21 @@
   --color-error-background: #fff1f2;
   --color-error-border: #c81e3a;
   --color-error-text: #8a1538;
+
+  /* Spacing scale. */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+
+  /* Shape and elevation tokens. */
   --radius-small: 0.5rem;
   --radius-large: 1rem;
   --shadow-card: 0 1rem 2.5rem rgb(23 32 51 / 10%);
+
+  /* Global typography and page colors. */
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -27,12 +35,14 @@
   background: var(--color-background);
 }
 
+/* Use predictable sizing for every rendered box. */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+/* Establish the shared document canvas. */
 body {
   min-width: 0;
   min-height: 100vh;
@@ -43,21 +53,25 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Style standard text links. */
 a {
   color: var(--color-primary);
   text-underline-offset: 0.18em;
 }
 
+/* Make link hover state visible. */
 a:hover {
   color: var(--color-primary-hover);
 }
 
+/* Inherit the document font in interactive controls. */
 button,
 input,
 textarea {
   font: inherit;
 }
 
+/* Style the primary button primitive. */
 button {
   min-height: 2.75rem;
   border: 0;
@@ -69,20 +83,24 @@ button {
   cursor: pointer;
 }
 
+/* Emphasize hoverable buttons. */
 button:hover {
   background: var(--color-primary-hover);
 }
 
+/* Communicate unavailable button actions. */
 button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
 
+/* Preserve a strong keyboard focus indicator. */
 :focus-visible {
   outline: 0.2rem solid var(--color-focus);
   outline-offset: 0.18rem;
 }
 
+/* Keep the skip link off-screen until focused. */
 .skip-link {
   position: fixed;
   top: var(--space-3);
@@ -95,11 +113,13 @@ button:disabled {
   transform: translateY(-200%);
 }
 
+/* Reveal the skip link for keyboard users. */
 .skip-link:focus {
   color: #ffffff;
   transform: translateY(0);
 }
 
+/* Center narrow standalone pages. */
 .page-shell {
   display: grid;
   min-height: 100vh;
@@ -107,6 +127,7 @@ button:disabled {
   padding: clamp(var(--space-4), 5vw, var(--space-8));
 }
 
+/* Present authentication content as a compact card. */
 .auth-card {
   width: min(100%, 28rem);
   border: 1px solid var(--color-border);
@@ -116,11 +137,13 @@ button:disabled {
   box-shadow: var(--shadow-card);
 }
 
+/* Separate the authentication heading group. */
 .auth-card__header {
   margin-bottom: var(--space-6);
   text-align: center;
 }
 
+/* Display the product eyebrow above auth headings. */
 .auth-card__eyebrow {
   margin: 0 0 var(--space-2);
   color: var(--color-primary);
@@ -130,31 +153,37 @@ button:disabled {
   text-transform: uppercase;
 }
 
+/* Scale the primary authentication heading. */
 .auth-card h1 {
   margin: 0;
   font-size: clamp(1.75rem, 8vw, 2.25rem);
   line-height: 1.2;
 }
 
+/* De-emphasize supporting authentication text. */
 .auth-card__description {
   margin: var(--space-3) 0 0;
   color: var(--color-muted);
 }
 
+/* Stack authentication form controls consistently. */
 .auth-form {
   display: grid;
   gap: var(--space-4);
 }
 
+/* Stack each shared form label and control. */
 .form-field {
   display: grid;
   gap: var(--space-2);
 }
 
+/* Emphasize visible form labels. */
 .form-field label {
   font-weight: 700;
 }
 
+/* Share the input and textarea surface styles. */
 .form-field input,
 .form-field textarea {
   width: 100%;
@@ -166,16 +195,19 @@ button:disabled {
   color: var(--color-text);
 }
 
+/* Highlight hovered form controls. */
 .form-field input:hover,
 .form-field textarea:hover {
   border-color: var(--color-muted);
 }
 
+/* Highlight focused form controls. */
 .form-field input:focus,
 .form-field textarea:focus {
   border-color: var(--color-focus);
 }
 
+/* Present validation errors without relying on color alone. */
 .form-error {
   margin: 0;
   border: 1px solid var(--color-error-border);
@@ -187,17 +219,20 @@ button:disabled {
   font-weight: 600;
 }
 
+/* Stretch the main auth action across the card. */
 .auth-form button {
   width: 100%;
   margin-top: var(--space-2);
 }
 
+/* Place the alternate auth link below the form. */
 .auth-card__alternative {
   margin: var(--space-6) 0 0;
   color: var(--color-muted);
   text-align: center;
 }
 
+/* Fill the viewport with the Chat page layout. */
 .chat-page {
   display: flex;
   min-width: 0;
@@ -205,11 +240,13 @@ button:disabled {
   flex-direction: column;
 }
 
+/* Separate the Chat header from conversation content. */
 .chat-header {
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
 
+/* Align the Chat heading and navigation. */
 .chat-header__inner {
   display: flex;
   width: min(100%, 56rem);
@@ -221,26 +258,41 @@ button:disabled {
   padding: var(--space-4) clamp(var(--space-4), 5vw, var(--space-8));
 }
 
+/* Scale the Chat page heading. */
 .chat-header__title {
   margin: 0;
   font-size: clamp(1.5rem, 5vw, 2rem);
   line-height: 1.2;
 }
 
+/* De-emphasize the Chat page description. */
 .chat-header__description {
   margin: var(--space-1) 0 0;
   color: var(--color-muted);
 }
 
-.chat-nav {
+/* Share navigation alignment across protected pages. */
+.chat-nav,
+.admin-nav {
   display: flex;
   min-width: 0;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-2);
 }
 
-.chat-nav__link {
+/* Align Chat actions to the right on wide screens. */
+.chat-nav {
+  justify-content: flex-end;
+}
+
+/* Allow Admin actions to wrap when needed. */
+.admin-nav {
+  flex-wrap: wrap;
+}
+
+/* Present protected-page links as secondary buttons. */
+.chat-nav__link,
+.admin-nav__link {
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
@@ -256,48 +308,67 @@ button:disabled {
   text-decoration: none;
 }
 
-.chat-nav__link:hover {
+/* Fill protected-page navigation links on hover. */
+.chat-nav__link:hover,
+.admin-nav__link:hover {
   background: var(--color-primary);
   color: #ffffff;
 }
 
-.chat-nav__logout {
+/* Remove default margins from logout forms. */
+.chat-nav__logout,
+.admin-nav__logout {
   margin: 0;
 }
 
-.chat-main {
+/* Share the centered content grid across protected pages. */
+.chat-main,
+.admin-main {
   display: grid;
-  width: min(100%, 56rem);
   min-width: 0;
   margin: 0 auto;
-  flex: 1;
   align-content: start;
   gap: var(--space-6);
   padding: clamp(var(--space-4), 5vw, var(--space-8));
 }
 
+/* Keep Chat content readable and fill remaining height. */
+.chat-main {
+  width: min(100%, 56rem);
+  flex: 1;
+}
+
+/* Stack conversation records in chronological display order. */
 .chat-history {
   display: grid;
   min-width: 0;
   gap: var(--space-6);
 }
 
-.chat-empty-state {
+/* Share empty-state surfaces across protected pages. */
+.chat-empty-state,
+.admin-empty-state {
   margin: 0;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-large);
-  padding: var(--space-8) var(--space-4);
   background: var(--color-surface);
   color: var(--color-muted);
   text-align: center;
 }
 
+/* Give the Chat empty state comfortable vertical space. */
+.chat-empty-state {
+  padding: var(--space-8) var(--space-4);
+}
+
+/* Group the user and assistant messages in one exchange. */
 .chat-exchange {
   display: grid;
   min-width: 0;
   gap: var(--space-3);
 }
 
+/* Style the shared Chat message bubble. */
 .chat-message {
   display: grid;
   width: min(80%, 38rem);
@@ -310,6 +381,7 @@ button:disabled {
   box-shadow: 0 0.25rem 0.75rem rgb(23 32 51 / 6%);
 }
 
+/* Align and emphasize user messages. */
 .chat-message--user {
   justify-self: end;
   border-color: var(--color-primary);
@@ -318,27 +390,32 @@ button:disabled {
   color: #ffffff;
 }
 
+/* Align assistant messages to the start edge. */
 .chat-message--assistant {
   justify-self: start;
   border-bottom-left-radius: var(--radius-small);
 }
 
+/* Label each message author. */
 .chat-message__label {
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 700;
 }
 
+/* De-emphasize assistant metadata. */
 .chat-message--assistant .chat-message__label,
 .chat-message--assistant .chat-message__time {
   color: var(--color-muted);
 }
 
+/* Preserve contrast for user message metadata. */
 .chat-message--user .chat-message__label,
 .chat-message--user .chat-message__time {
   color: #ffffff;
 }
 
+/* Preserve plain-text line breaks and wrap long content. */
 .chat-message__content {
   min-width: 0;
   margin: 0;
@@ -346,26 +423,31 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+/* Display compact message timestamps. */
 .chat-message__time {
   font-size: 0.75rem;
 }
 
+/* Distinguish failed assistant responses. */
 .chat-exchange--failed .chat-message--assistant {
   border-color: var(--color-error-border);
   background: var(--color-error-background);
   color: var(--color-error-text);
 }
 
+/* Keep failed response metadata legible. */
 .chat-exchange--failed .chat-message--assistant .chat-message__label,
 .chat-exchange--failed .chat-message--assistant .chat-message__time {
   color: var(--color-error-text);
 }
 
+/* Distinguish pending assistant responses. */
 .chat-exchange--pending .chat-message--assistant {
   border-style: dashed;
   color: var(--color-muted);
 }
 
+/* Present the Chat composer as a separate card. */
 .chat-composer {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-large);
@@ -374,95 +456,69 @@ button:disabled {
   box-shadow: var(--shadow-card);
 }
 
+/* Separate the composer heading from its form. */
 .chat-composer h2 {
   margin: 0 0 var(--space-4);
   font-size: 1.125rem;
 }
 
+/* Stack Chat form content and actions. */
 .chat-form {
   display: grid;
   min-width: 0;
   gap: var(--space-3);
 }
 
-.chat-form__field {
-  display: grid;
+/* Prevent the shared field from overflowing the Chat grid. */
+.chat-form .form-field {
   min-width: 0;
-  gap: var(--space-2);
 }
 
-.chat-form__field label {
-  font-weight: 700;
-}
-
-.chat-form__field textarea {
-  width: 100%;
+/* Give the question textarea enough editable space. */
+.chat-form textarea {
   min-width: 0;
   min-height: 7rem;
   resize: vertical;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-small);
-  padding: var(--space-3);
-  background: var(--color-surface);
-  color: var(--color-text);
 }
 
-.chat-form__field textarea:hover {
-  border-color: var(--color-muted);
-}
-
-.chat-form__field textarea:focus {
-  border-color: var(--color-focus);
-}
-
-.chat-form__error {
-  margin: 0;
-  border: 1px solid var(--color-error-border);
-  border-left-width: 0.3rem;
-  border-radius: var(--radius-small);
-  padding: var(--space-3);
-  background: var(--color-error-background);
-  color: var(--color-error-text);
-  font-weight: 600;
-}
-
+/* Align the Chat submit action to the end edge. */
 .chat-form__actions {
   display: flex;
   min-width: 0;
   justify-content: flex-end;
 }
 
+/* Keep the Admin page within the viewport. */
 .admin-page {
   min-width: 0;
   min-height: 100vh;
 }
 
+/* Allow wider content for operational metadata. */
 .admin-main {
-  display: grid;
   width: min(100%, 80rem);
-  min-width: 0;
-  margin: 0 auto;
-  align-content: start;
-  gap: var(--space-6);
-  padding: clamp(var(--space-4), 5vw, var(--space-8));
 }
 
+/* Stack the Admin heading, description, and navigation. */
 .admin-header {
   display: grid;
   gap: var(--space-2);
 }
 
+/* Scale the Admin page heading. */
 .admin-header h1 {
   margin: 0;
   font-size: clamp(1.75rem, 5vw, 2.25rem);
   line-height: 1.2;
 }
 
+/* De-emphasize the Admin page description. */
 .admin-header__description {
   margin: 0;
   color: var(--color-muted);
 }
 
+/* Provide a focusable horizontal scroll region for the table. */
 .admin-table-container {
   width: 100%;
   min-width: 0;
@@ -476,10 +532,12 @@ button:disabled {
   scrollbar-gutter: stable;
 }
 
+/* Keep the scroll region focus indicator close to its edge. */
 .admin-table-container:focus-visible {
   outline-offset: var(--space-1);
 }
 
+/* Keep all metadata columns available for horizontal scrolling. */
 .admin-table {
   width: 100%;
   min-width: 72rem;
@@ -488,6 +546,7 @@ button:disabled {
   font-size: 0.875rem;
 }
 
+/* Describe the metadata table above its headers. */
 .admin-table caption {
   caption-side: top;
   border-bottom: 1px solid var(--color-border);
@@ -498,6 +557,7 @@ button:disabled {
   text-align: left;
 }
 
+/* Align and separate all metadata cells. */
 .admin-table th,
 .admin-table td {
   border-bottom: 1px solid var(--color-border);
@@ -507,83 +567,97 @@ button:disabled {
   vertical-align: top;
 }
 
+/* Distinguish metadata column headers. */
 .admin-table th {
   background: var(--color-background);
   font-weight: 700;
 }
 
+/* Remove the final redundant row border. */
 .admin-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
+/* Keep UTC timestamps on one readable line. */
 .admin-table time {
   white-space: nowrap;
 }
 
+/* Give the Admin empty state responsive spacing. */
 .admin-empty-state {
-  margin: 0;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-large);
   padding: clamp(var(--space-6), 8vw, var(--space-8));
-  background: var(--color-surface);
-  color: var(--color-muted);
-  text-align: center;
 }
 
+/* Adapt forms, navigation, messages, and tables to narrow screens. */
 @media (max-width: 30rem) {
+  /* Align standalone pages to the top of short mobile screens. */
   .page-shell {
     align-items: start;
   }
 
+  /* Remove heavy auth card elevation on narrow screens. */
   .auth-card {
     box-shadow: none;
   }
 
+  /* Stack the Chat heading above its navigation. */
   .chat-header__inner {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .chat-nav {
+  /* Stretch and wrap protected-page navigation. */
+  .chat-nav,
+  .admin-nav {
     align-items: stretch;
     flex-wrap: wrap;
+  }
+
+  /* Align wrapped Chat actions to the start edge. */
+  .chat-nav {
     justify-content: flex-start;
   }
 
+  /* Give each navigation action usable mobile width. */
   .chat-nav__link,
-  .chat-nav__logout {
+  .chat-nav__logout,
+  .admin-nav__link,
+  .admin-nav__logout {
     min-width: 0;
     flex: 1 1 8rem;
   }
 
-  .chat-nav__logout button {
+  /* Stretch logout buttons across their form. */
+  .chat-nav__logout button,
+  .admin-nav__logout button {
     width: 100%;
   }
 
-  .chat-main {
-    gap: var(--space-4);
-    padding: var(--space-4);
-  }
-
-  .chat-message {
-    width: 92%;
-  }
-
-  .chat-composer {
-    padding: var(--space-4);
-    box-shadow: none;
-  }
-
-  .chat-form__actions,
-  .chat-form__actions button {
-    width: 100%;
-  }
-
+  /* Reduce protected-page spacing on mobile. */
+  .chat-main,
   .admin-main {
     gap: var(--space-4);
     padding: var(--space-4);
   }
 
+  /* Let Chat bubbles use more of the mobile viewport. */
+  .chat-message {
+    width: 92%;
+  }
+
+  /* Reduce Chat composer padding and elevation. */
+  .chat-composer {
+    padding: var(--space-4);
+    box-shadow: none;
+  }
+
+  /* Stretch the Chat submit action on mobile. */
+  .chat-form__actions,
+  .chat-form__actions button {
+    width: 100%;
+  }
+
+  /* Simplify the mobile Admin table container. */
   .admin-table-container {
     border-radius: var(--radius-small);
     box-shadow: none;

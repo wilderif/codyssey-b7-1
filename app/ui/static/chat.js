@@ -1,7 +1,10 @@
+// Isolate the Chat page controller from the global browser scope.
 (() => {
   "use strict";
 
+  // Fallback text for responses that are unsafe or impossible to interpret.
   const GENERIC_ERROR_MESSAGE = "요청을 처리하지 못했습니다.";
+  // Server error codes whose detail is safe to show to the user.
   const DISPLAYABLE_ERROR_CODES = new Set([
     "validation_error",
     "db_save_error",
@@ -9,16 +12,24 @@
     "openai_api_error",
     "openai_timeout",
   ]);
+  // ISO 8601 shape accepted for a successful response timestamp.
   const ISO_TIMESTAMP_PATTERN =
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
+  // Form that owns the Chat submission flow.
   const form = document.getElementById("chat-form");
+  // Text input that holds the user's draft question.
   const messageInput = document.getElementById("chat-message");
+  // Button disabled while one request is in progress.
   const submitButton = document.getElementById("chat-submit");
+  // Accessible container for client-side form errors.
   const formError = document.getElementById("chat-form-error");
+  // Timeline that receives pending and completed exchanges.
   const history = document.getElementById("chat-history");
+  // Inert markup cloned for each pending exchange.
   const pendingTemplate = document.getElementById("chat-pending-template");
 
+  // Leave unrelated pages untouched when any Chat dependency is absent.
   if (
     !form ||
     !messageInput ||
@@ -30,12 +41,15 @@
     return;
   }
 
+  // Prevent duplicate requests until the active submission finishes.
   let isSubmitting = false;
 
+  // Narrow an unknown JSON value to a plain object-like payload.
   function isObject(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
+  // Validate and normalize the success payload used by the renderer.
   function parseSuccessPayload(payload) {
     if (
       !isObject(payload) ||
@@ -48,6 +62,7 @@
       return null;
     }
 
+    // Parsed date used to reject impossible timestamps and build display text.
     const createdAt = new Date(payload.created_at);
     if (Number.isNaN(createdAt.getTime())) {
       return null;
@@ -61,6 +76,7 @@
     };
   }
 
+  // Validate the error payload before its code or detail is consumed.
   function parseErrorPayload(payload) {
     if (
       !isObject(payload) ||
@@ -73,20 +89,21 @@
     return { code: payload.code, detail: payload.detail };
   }
 
-  function showFormError(message) {
+  // Show one form error or hide the empty error container.
+  function setFormError(message = "") {
     formError.textContent = message;
-    formError.hidden = false;
+    formError.hidden = message.length === 0;
   }
 
-  function clearFormError() {
-    formError.textContent = "";
-    formError.hidden = true;
-  }
-
+  // Append a pending exchange and return the nodes updated after the request.
   function createPendingExchange(question) {
+    // New exchange cloned from inert template markup.
     const exchange = pendingTemplate.content.firstElementChild.cloneNode(true);
+    // Question node populated with user text through textContent.
     const questionElement = exchange.querySelector("[data-chat-question]");
+    // Response node reserved for a success answer or safe error.
     const responseElement = exchange.querySelector("[data-chat-response]");
+    // Timestamp node revealed only after a valid success response.
     const timeElement = exchange.querySelector("[data-chat-time]");
 
     questionElement.textContent = question;
@@ -96,6 +113,7 @@
     return { exchange, responseElement, timeElement };
   }
 
+  // Replace a pending exchange with the validated server answer.
   function renderSuccess(pendingExchange, result) {
     pendingExchange.exchange.classList.remove("chat-exchange--pending");
     pendingExchange.exchange.setAttribute(
@@ -108,6 +126,7 @@
     pendingExchange.timeElement.hidden = false;
   }
 
+  // Mark a pending exchange as failed and announce its safe message.
   function renderFailure(pendingExchange, message) {
     pendingExchange.exchange.classList.remove("chat-exchange--pending");
     pendingExchange.exchange.classList.add("chat-exchange--failed");
@@ -116,32 +135,48 @@
     pendingExchange.responseElement.textContent = message;
   }
 
-  form.addEventListener("submit", async (event) => {
+  // Re-enable input and restore focus after a completed request.
+  function restoreIdleState() {
+    isSubmitting = false;
+    submitButton.disabled = false;
+    messageInput.focus();
+  }
+
+  // Run the validation, request, rendering, and recovery phases in order.
+  async function handleSubmit(event) {
+    // Keep the browser from replacing the server-rendered page.
     event.preventDefault();
 
+    // Ignore repeated submits while the current request is pending.
     if (isSubmitting) {
       return;
     }
 
+    // Trimmed copy sent to the API and rendered in the timeline.
     const submittedQuestion = messageInput.value.trim();
+
+    // Reject empty or oversized questions before changing the draft.
     if (submittedQuestion.length === 0) {
-      showFormError("질문을 입력해주세요.");
+      setFormError("질문을 입력해주세요.");
       return;
     }
     if (submittedQuestion.length > 1000) {
-      showFormError("질문은 1000자 이하로 입력해주세요.");
+      setFormError("질문은 1000자 이하로 입력해주세요.");
       return;
     }
 
-    clearFormError();
+    // Clear the accepted draft and lock the form for one request.
+    setFormError();
     messageInput.value = "";
     isSubmitting = true;
     submitButton.disabled = true;
 
+    // Optimistic exchange kept stable through success or failure rendering.
     const pendingExchange = createPendingExchange(submittedQuestion);
-    let isRedirecting = false;
 
+    // Send the accepted question and render only validated response data.
     try {
+      // Same-origin API response for the active Chat Session.
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -151,39 +186,40 @@
         credentials: "same-origin",
         body: JSON.stringify({ message: submittedQuestion }),
       });
+      // Unknown JSON payload validated before any fields are trusted.
       const payload = await response.json();
 
       if (response.ok) {
+        // Normalized success result or null for a malformed payload.
         const result = parseSuccessPayload(payload);
         if (result === null) {
           renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
+        } else {
+          renderSuccess(pendingExchange, result);
+        }
+      } else {
+        // Validated API error or null for an unexpected error shape.
+        const error = parseErrorPayload(payload);
+        if (error?.code === "not_authenticated") {
+          window.location.assign("/login");
           return;
         }
 
-        renderSuccess(pendingExchange, result);
-        return;
+        // Whitelisted server detail or the generic safe fallback.
+        const message =
+          error !== null && DISPLAYABLE_ERROR_CODES.has(error.code)
+            ? error.detail
+            : GENERIC_ERROR_MESSAGE;
+        renderFailure(pendingExchange, message);
       }
-
-      const error = parseErrorPayload(payload);
-      if (error?.code === "not_authenticated") {
-        isRedirecting = true;
-        window.location.assign("/login");
-        return;
-      }
-
-      const message =
-        error !== null && DISPLAYABLE_ERROR_CODES.has(error.code)
-          ? error.detail
-          : GENERIC_ERROR_MESSAGE;
-      renderFailure(pendingExchange, message);
     } catch {
       renderFailure(pendingExchange, GENERIC_ERROR_MESSAGE);
-    } finally {
-      if (!isRedirecting) {
-        isSubmitting = false;
-        submitButton.disabled = false;
-        messageInput.focus();
-      }
     }
-  });
+
+    // Restore the editable state after every non-redirect outcome.
+    restoreIdleState();
+  }
+
+  // Start the Chat request flow from the form's submit event.
+  form.addEventListener("submit", handleSubmit);
 })();

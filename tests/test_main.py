@@ -14,11 +14,16 @@ from uuid import UUID
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user_id
+from app.auth.dependencies import (
+    AuthenticatedUser,
+    get_current_user_id,
+    require_authenticated_user,
+)
 from app.core import config as config_module
 from app.core.config import Settings
-from app.core.database import Base
+from app.core.database import Base, get_db
 from app.core.request_id import REQUEST_ID_HEADER
 
 
@@ -110,6 +115,7 @@ def test_health_initializes_registered_models_before_serving_requests(
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
     assert len(initialized_tables) == 1
     assert {"users", "chat_exchanges"} <= initialized_tables[0]
     assert startup_events == [
@@ -219,6 +225,103 @@ def test_create_app_sets_configured_logging_level(main_module: ModuleType) -> No
     assert logging.getLogger().level == logging.WARNING
 
 
+def test_create_app_registers_ui_router_once(main_module: ModuleType) -> None:
+    application = main_module.create_app(_settings())
+
+    matching_routes = [
+        route
+        for route in application.routes
+        if getattr(route, "original_router", None) is main_module.ui_router
+    ]
+
+    assert len(matching_routes) == 1
+
+
+def test_create_app_mounts_static_files_once(main_module: ModuleType) -> None:
+    application = main_module.create_app(_settings())
+
+    matching_routes = [
+        route
+        for route in application.routes
+        if getattr(route, "path", None) == "/static"
+    ]
+
+    assert len(matching_routes) == 1
+    assert matching_routes[0].name == "static"
+
+
+def test_static_assets_are_public_and_have_expected_content_types(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    with TestClient(application) as client:
+        stylesheet_response = client.get("/static/styles.css")
+        script_response = client.get("/static/chat.js")
+
+    assert stylesheet_response.status_code == 200
+    assert stylesheet_response.headers["content-type"].startswith("text/css")
+    assert UUID(stylesheet_response.headers[REQUEST_ID_HEADER]).version == 4
+    assert script_response.status_code == 200
+    assert script_response.headers["content-type"].startswith("text/javascript")
+    assert UUID(script_response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_missing_static_asset_returns_404(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    with TestClient(application) as client:
+        response = client.get("/static/missing.css")
+
+    assert response.status_code == 404
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_server_rendered_auth_flow_uses_session_cookie(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    db: Session,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+    application.dependency_overrides[get_db] = lambda: db
+
+    with TestClient(application) as client:
+        signup_response = client.post(
+            "/signup",
+            data={"username": "flow-user", "password": "password"},
+            follow_redirects=False,
+        )
+        logged_out_chat_response = client.get("/chat", follow_redirects=False)
+        login_response = client.post(
+            "/login",
+            data={"username": "flow-user", "password": "password"},
+            follow_redirects=False,
+        )
+        logged_in_chat_response = client.get("/chat")
+        logout_response = client.post("/logout", follow_redirects=False)
+        post_logout_chat_response = client.get("/chat", follow_redirects=False)
+
+    assert signup_response.status_code == 303
+    assert signup_response.headers["location"] == "/login"
+    assert logged_out_chat_response.status_code == 303
+    assert logged_out_chat_response.headers["location"] == "/login"
+    assert login_response.status_code == 303
+    assert login_response.headers["location"] == "/chat"
+    assert logged_in_chat_response.status_code == 200
+    assert "아직 대화 기록이 없습니다." in logged_in_chat_response.text
+    assert logout_response.status_code == 303
+    assert logout_response.headers["location"] == "/login"
+    assert post_logout_chat_response.status_code == 303
+    assert post_logout_chat_response.headers["location"] == "/login"
+
+
 def test_unhandled_api_error_preserves_request_id_on_500_response(
     main_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -234,6 +337,66 @@ def test_unhandled_api_error_preserves_request_id_on_500_response(
         response = client.get("/api/_test/unhandled-error")
 
     assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_error",
+        "detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    }
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_unhandled_html_error_returns_safe_response_with_request_id(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+
+    @application.get("/_test/unhandled-html-error")
+    def raise_unhandled_html_error() -> None:
+        raise RuntimeError("SELECT password_hash FROM users")
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/_test/unhandled-html-error")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert "password_hash" not in response.text
+    assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
+
+
+def test_chat_history_failure_uses_safe_html_error_boundary(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.ui import router as ui_router_module
+
+    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    application = main_module.create_app(_settings())
+    db_session = object()
+    application.dependency_overrides[require_authenticated_user] = lambda: (
+        AuthenticatedUser(user_id=42, is_admin=False)
+    )
+    application.dependency_overrides[get_db] = lambda: db_session
+
+    def raise_history_failure(*, user_id: int, db: object) -> None:
+        assert user_id == 42
+        assert db is db_session
+        raise RuntimeError("SELECT error_message FROM chat_exchanges")
+
+    monkeypatch.setattr(
+        ui_router_module,
+        "list_chat_exchange_history",
+        raise_history_failure,
+    )
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/chat")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text == "서버 오류가 발생했습니다."
+    assert "error_message" not in response.text
     assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
 
 
