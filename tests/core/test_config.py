@@ -47,6 +47,51 @@ def test_admin_username_defaults_to_admin(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.admin_username == "admin"
 
 
+def test_openai_model_defaults_to_the_documented_cost_focused_model() -> None:
+    settings = Settings()
+
+    assert settings.openai_model == "gpt-5-nano"
+
+
+@pytest.mark.parametrize(
+    ("configured_timeout", "expected_timeout"),
+    [("1", 1.0), ("0.25", 0.25)],
+)
+def test_openai_timeout_converts_positive_environment_values(
+    monkeypatch: pytest.MonkeyPatch,
+    configured_timeout: str,
+    expected_timeout: float,
+) -> None:
+    monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", configured_timeout)
+
+    settings = Settings()
+
+    assert settings.openai_timeout_seconds == expected_timeout
+
+
+@pytest.mark.parametrize("configured_timeout", ["0", "-1", "not-a-number"])
+def test_openai_timeout_rejects_nonpositive_or_invalid_values(
+    monkeypatch: pytest.MonkeyPatch,
+    configured_timeout: str,
+) -> None:
+    monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", configured_timeout)
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_environment_and_log_level_normalize_case_insensitively(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "LOCAL")
+    monkeypatch.setenv("LOG_LEVEL", "warning")
+
+    settings = Settings()
+
+    assert settings.app_env == "local"
+    assert settings.log_level == "WARNING"
+
+
 @pytest.mark.parametrize(
     ("configured_username", "expected_username"),
     [

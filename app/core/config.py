@@ -31,7 +31,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="OPENAI_API_KEY",
     )
-    openai_model: str | None = Field(default=None, validation_alias="OPENAI_MODEL")
+    openai_model: str | None = Field(
+        default="gpt-5-nano",
+        validation_alias="OPENAI_MODEL",
+    )
     openai_timeout_seconds: float = Field(
         default=30,
         validation_alias="OPENAI_TIMEOUT_SECONDS",

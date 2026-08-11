@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Self
 
 import pytest
 from sqlalchemy import select
@@ -65,6 +66,19 @@ class UnexpectedErrorGenerator:
 
     async def generate(self, *, messages: Sequence[ChatMessage]) -> str:
         raise RuntimeError("unexpected generator failure")
+
+
+class FakeAsyncOpenAIClient:
+    """Production wrapper의 client context manager 경계만 대체한다."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        self.closed = True
 
 
 class FailingSaveRepository(SqlAlchemyChatExchangeRepository):
@@ -575,6 +589,55 @@ def test_production_wrapper_logs_safely_before_client_configuration_failure(
         _service_log_messages(caplog),
         request_id="wrapper-config-id",
         expected_events={"request_received"},
+    )
+
+
+def test_production_wrapper_composes_client_generator_and_real_persistence(
+    db: Session,
+    user_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeAsyncOpenAIClient()
+    received: dict[str, object] = {}
+
+    class FakeProductionGenerator:
+        def __init__(self, *, client: object, model: str) -> None:
+            received.update({"client": client, "model": model})
+
+        async def generate(self, *, messages: Sequence[ChatMessage]) -> str:
+            received["messages"] = list(messages)
+            return "production wrapper answer"
+
+    monkeypatch.setattr(service_module, "create_openai_client", lambda: client)
+    monkeypatch.setattr(service_module, "get_openai_model", lambda: "configured-model")
+    monkeypatch.setattr(
+        service_module, "OpenAIAnswerGenerator", FakeProductionGenerator
+    )
+
+    result = asyncio.run(
+        service_module.process_chat(
+            user_id=user_id,
+            message="  wrapper question  ",
+            request_id="wrapper-success-request",
+            user_agent="wrapper-agent",
+            db=db,
+        )
+    )
+    saved = db.get(ChatExchange, result.chat_exchange_id)
+
+    assert client.closed is True
+    assert received["client"] is client
+    assert received["model"] == "configured-model"
+    assert received["messages"] == [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "wrapper question"},
+    ]
+    assert saved is not None
+    assert (saved.question, saved.answer, saved.request_id, saved.user_agent) == (
+        "wrapper question",
+        "production wrapper answer",
+        "wrapper-success-request",
+        "wrapper-agent",
     )
 
 

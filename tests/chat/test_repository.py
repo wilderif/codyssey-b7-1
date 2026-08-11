@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine, inspect
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from app.chat.models import ChatExchange
@@ -15,6 +15,7 @@ from app.chat.repository import (
     create_failed_exchange,
     create_success_exchange,
     get_recent_success_exchanges,
+    get_user_exchange,
     list_user_exchanges,
 )
 
@@ -367,3 +368,99 @@ def test_list_user_exchanges_returns_only_user_history_newest_first(
     exchanges = list_user_exchanges(db=db, user_id=user_id)
 
     assert [exchange.question for exchange in exchanges] == ["new failed", "old"]
+
+
+def test_get_user_exchange_returns_only_the_requesting_users_record(
+    db: Session,
+    user_id: int,
+    user_id_factory: Callable[[str], int],
+) -> None:
+    other_user_id = user_id_factory("single-history-other-user")
+    own_exchange = create_success_exchange(
+        db=db,
+        user_id=user_id,
+        question="mine",
+        answer="my answer",
+        request_id="single-history-mine",
+        user_agent=None,
+        response_time_ms=1,
+    )
+    other_exchange = create_success_exchange(
+        db=db,
+        user_id=other_user_id,
+        question="other",
+        answer="other answer",
+        request_id="single-history-other",
+        user_agent=None,
+        response_time_ms=1,
+    )
+    db.commit()
+
+    own_result = get_user_exchange(
+        db=db,
+        user_id=user_id,
+        chat_exchange_id=own_exchange.id,
+    )
+    foreign_result = get_user_exchange(
+        db=db,
+        user_id=user_id,
+        chat_exchange_id=other_exchange.id,
+    )
+    missing_result = get_user_exchange(db=db, user_id=user_id, chat_exchange_id=9999)
+
+    assert own_result is not None
+    assert own_result.id == own_exchange.id
+    assert foreign_result is None
+    assert missing_result is None
+
+
+def test_chat_exchange_normalizes_persisted_timestamps_to_utc(
+    db: Session,
+    user_id: int,
+) -> None:
+    exchange = ChatExchange(
+        user_id=user_id,
+        question="timezone question",
+        answer="timezone answer",
+        status="success",
+        error_message=None,
+        request_id="timezone-request",
+        user_agent=None,
+        response_time_ms=1,
+        error_code=None,
+        created_at=datetime(2026, 8, 6, 9, tzinfo=timezone(timedelta(hours=9))),
+    )
+    db.add(exchange)
+    db.commit()
+    db.expire_all()
+
+    saved = db.get(ChatExchange, exchange.id)
+
+    assert saved is not None
+    assert saved.created_at == datetime(2026, 8, 6, tzinfo=UTC)
+    assert saved.created_at.tzinfo == UTC
+
+
+def test_chat_exchange_rejects_naive_timestamps(
+    db: Session,
+    user_id: int,
+) -> None:
+    db.add(
+        ChatExchange(
+            user_id=user_id,
+            question="naive timestamp question",
+            answer="naive timestamp answer",
+            status="success",
+            error_message=None,
+            request_id="naive-timestamp-request",
+            user_agent=None,
+            response_time_ms=1,
+            error_code=None,
+            created_at=datetime.fromisoformat("2026-08-06T00:00:00"),
+        )
+    )
+
+    with pytest.raises(StatementError, match="timezone-aware"):
+        db.commit()
+
+    db.rollback()
