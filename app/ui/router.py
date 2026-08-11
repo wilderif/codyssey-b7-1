@@ -36,13 +36,8 @@ _REGISTRATION_ERROR_MESSAGES = {
 _LOGIN_ERROR_MESSAGE = "아이디 또는 비밀번호가 올바르지 않습니다."
 
 
-@router.get("/")
-def get_root(
-    _authenticated_user: Annotated[
-        AuthenticatedUser,
-        Depends(require_authenticated_user),
-    ],
-) -> RedirectResponse:
+@router.get("/", dependencies=[Depends(require_authenticated_user)])
+def get_root() -> RedirectResponse:
     """유효한 login 사용자를 Chat 화면으로 이동시킨다."""
 
     return RedirectResponse(url="/chat", status_code=status.HTTP_303_SEE_OTHER)
@@ -52,12 +47,7 @@ def get_root(
 def get_signup(request: Request) -> Response:
     """빈 회원가입 form을 제공한다."""
 
-    return _render_auth_template(
-        request=request,
-        template_name="signup.html",
-        error=None,
-        username="",
-    )
+    return _render_auth_template(request, "signup.html")
 
 
 @router.post("/signup", response_class=HTMLResponse)
@@ -69,11 +59,11 @@ def post_signup(
 ) -> Response:
     """회원가입 form을 처리하고 Login 화면으로 이동시킨다."""
 
-    normalized_username = username.strip()
+    username = username.strip()
     try:
         register_user(
             db=db,
-            username=normalized_username,
+            username=username,
             password=password,
         )
     except RegistrationError as error:
@@ -81,7 +71,7 @@ def post_signup(
             request=request,
             template_name="signup.html",
             error=_REGISTRATION_ERROR_MESSAGES[error.reason],
-            username=normalized_username,
+            username=username,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -92,12 +82,7 @@ def post_signup(
 def get_login(request: Request) -> Response:
     """빈 Login form을 제공한다."""
 
-    return _render_auth_template(
-        request=request,
-        template_name="login.html",
-        error=None,
-        username="",
-    )
+    return _render_auth_template(request, "login.html")
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -109,10 +94,10 @@ def post_login(
 ) -> Response:
     """Login form을 검증하고 성공한 사용자 Session을 생성한다."""
 
-    normalized_username = username.strip()
+    username = username.strip()
     user = authenticate_user(
         db=db,
-        username=normalized_username,
+        username=username,
         password=password,
     )
     if user is None:
@@ -120,7 +105,7 @@ def post_login(
             request=request,
             template_name="login.html",
             error=_LOGIN_ERROR_MESSAGE,
-            username=normalized_username,
+            username=username,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -162,11 +147,11 @@ def get_chat(
 
 
 def _render_auth_template(
-    *,
     request: Request,
     template_name: str,
-    error: str | None,
-    username: str,
+    *,
+    error: str | None = None,
+    username: str = "",
     status_code: int = status.HTTP_200_OK,
 ) -> Response:
     return templates.TemplateResponse(
