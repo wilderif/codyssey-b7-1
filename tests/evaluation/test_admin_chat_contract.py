@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
 from collections.abc import Generator
 from contextlib import nullcontext
 from dataclasses import fields
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Self
 
 import pytest
@@ -16,18 +18,39 @@ from pydantic import SecretStr
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
-import app.main as main_module
 from app.auth.models import ADMIN_ROLE, User
 from app.auth.repository import create_user
 from app.chat.models import ChatExchange
+from app.core import config as config_module
 from app.core.config import Settings
 from app.core.database import get_db
+
+
+@pytest.fixture
+def main_module(monkeypatch: pytest.MonkeyPatch) -> Generator[ModuleType, None, None]:
+    """환경과 무관하게 application module을 test 설정으로 import한다."""
+
+    monkeypatch.setattr(
+        config_module,
+        "settings",
+        Settings(
+            session_secret=SecretStr("evaluation-session-secret"),
+            admin_initial_password=SecretStr("evaluation-password"),
+        ),
+    )
+    sys.modules.pop("app.main", None)
+    module = importlib.import_module("app.main")
+    try:
+        yield module
+    finally:
+        sys.modules.pop("app.main", None)
 
 
 @pytest.fixture
 def app(
     db: Session,
     monkeypatch: pytest.MonkeyPatch,
+    main_module: ModuleType,
 ) -> Generator[FastAPI, None, None]:
     """create_app의 실제 middleware/router/lifespan을 test DB에 연결한다."""
 
