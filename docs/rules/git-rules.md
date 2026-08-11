@@ -9,7 +9,9 @@
 
 ## Commit
 
-- `feat:`, `fix:`, `docs:`, `chore:` 형식을 사용합니다.
+- `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:` 형식을 사용합니다.
+- `test:`는 test code의 추가·수정·정리에 사용합니다.
+- `refactor:`는 동작 변경 없는 production code 구조 개선에 사용합니다.
 - 한 commit은 한 가지 목적만 가지며, 단순 줄바꿈이나 file 이동만으로 수를 채우지 않습니다.
 
 ```text
