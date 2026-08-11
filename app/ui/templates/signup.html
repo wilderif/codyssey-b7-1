@@ -1,8 +1,10 @@
 {% extends "base.html" %}
+{# Signup page configuration and shared form composition. #}
 
 {% block page_title %}회원가입 | Codyssey{% endblock %}
 
 {% block content %}
+{# Signup-specific labels, constraints, and alternate navigation. #}
 {% set auth_form = {
   "name": "signup",
   "heading": "회원가입",
@@ -15,5 +17,6 @@
   "alternative_href": "/login",
   "alternative_label": "Login"
 } %}
+{# Render the shared form with the signup configuration above. #}
 {% include "_auth_form.html" %}
 {% endblock %}

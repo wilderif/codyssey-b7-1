@@ -1,16 +1,19 @@
 {% extends "base.html" %}
+{# Administrative log page for reviewing Chat request metadata. #}
 
 {% block page_title %}관리자 운영 기록 | Codyssey{% endblock %}
 {% block body_class %} class="admin-page"{% endblock %}
 
 {% block content %}
 <main id="main-content" class="admin-main">
+  {# Page introduction and account navigation. #}
   <header class="admin-header">
     <h1>관리자 운영 기록</h1>
     <p class="admin-header__description">
       Chat 요청별 운영 metadata를 최신순으로 확인합니다.
     </p>
 
+    {# Navigation back to Chat and the POST-only Logout action. #}
     <nav class="admin-nav" aria-label="주요 메뉴">
       <a class="admin-nav__link" href="/chat">Chat으로 돌아가기</a>
       <form class="admin-nav__logout" method="post" action="/logout">
@@ -19,6 +22,7 @@
     </nav>
   </header>
 
+  {# Scrollable operational log table when records are available. #}
   {% if items %}
   <div
     class="admin-table-container"
@@ -28,6 +32,7 @@
   >
     <table class="admin-table">
       <caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>
+      {# Stable public column order for the nine-field projection. #}
       <thead>
         <tr>
           <th scope="col">user_id</th>
@@ -42,6 +47,7 @@
         </tr>
       </thead>
       <tbody>
+        {# One fixed nine-field projection per Chat request. #}
         {% for item in items %}
         <tr>
           <td>{{ item.user_id }}</td>
@@ -63,6 +69,7 @@
     </table>
   </div>
   {% else %}
+  {# Empty state for administrators with no recorded requests. #}
   <p class="admin-empty-state">표시할 운영 기록이 없습니다.</p>
   {% endif %}
 </main>
