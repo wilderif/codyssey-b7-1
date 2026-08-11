@@ -500,7 +500,7 @@ button:disabled {
   resize: vertical;
 }
 
-/* Pair concise keyboard guidance with the current character count. */
+/* Keep the character count aligned with the input edge. */
 .chat-form__meta {
   display: flex;
   min-width: 0;
@@ -510,15 +510,14 @@ button:disabled {
   gap: var(--space-1) var(--space-3);
 }
 
-/* De-emphasize persistent input guidance without hiding it. */
-.chat-form__help,
+/* De-emphasize the persistent input counter. */
 .chat-form__counter {
   margin: 0;
   color: var(--color-muted);
   font-size: 0.8125rem;
 }
 
-/* Keep the changing count stable and readable beside the helper. */
+/* Keep the changing count stable and readable at the input edge. */
 .chat-form__counter {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
@@ -562,6 +561,14 @@ button:disabled {
   color: var(--color-muted);
 }
 
+/* Explain how to reach metadata outside the current viewport. */
+.admin-table-scroll-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 /* Provide a focusable horizontal scroll region for the table. */
 .admin-table-container {
   width: 100%;
@@ -574,6 +581,22 @@ button:disabled {
   box-shadow: var(--shadow-card);
   overscroll-behavior-inline: contain;
   scrollbar-gutter: stable;
+  scrollbar-color: var(--color-primary) var(--color-background);
+}
+
+/* Keep horizontal scrolling discoverable in Chromium and Safari. */
+.admin-table-container::-webkit-scrollbar {
+  height: 0.75rem;
+}
+
+.admin-table-container::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+.admin-table-container::-webkit-scrollbar-thumb {
+  border: 0.15rem solid var(--color-background);
+  border-radius: 999px;
+  background: var(--color-primary);
 }
 
 /* Keep the scroll region focus indicator close to its edge. */
@@ -642,7 +665,7 @@ button:disabled {
   border-bottom: 0;
 }
 
-/* Keep UTC timestamps on one readable line. */
+/* Keep KST timestamps on one readable line. */
 .admin-table time {
   white-space: nowrap;
 }
@@ -709,6 +732,11 @@ button:disabled {
   .chat-composer {
     padding: var(--space-4);
     box-shadow: none;
+  }
+
+  /* Keep two visible input lines while preserving more conversation space. */
+  .chat-form textarea {
+    min-height: 4.75rem;
   }
 
   /* Stretch the Chat submit action on mobile. */

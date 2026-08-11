@@ -119,7 +119,7 @@ def test_admin_logs_renders_safe_metadata_for_admin(
         "12",
         "34",
         'datetime="2026-08-09T10:30:00+00:00"',
-        "2026-08-09 10:30:00 UTC",
+        "2026-08-09 19:30:00 KST",
         "request-34",
         "5,819 ms",
         "failed",
@@ -157,6 +157,7 @@ def test_admin_logs_renders_semantic_table_contract(
     assert 'class="admin-table-container"' in response.text
     assert 'role="region"' in response.text
     assert 'aria-labelledby="admin-table-caption"' in response.text
+    assert 'aria-describedby="admin-table-scroll-hint"' in response.text
     assert 'tabindex="0"' in response.text
     assert '<caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>' in (
         response.text

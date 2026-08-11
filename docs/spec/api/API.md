@@ -14,7 +14,7 @@
 | Cookie | `HttpOnly=true`, `SameSite=Lax`, 배포 환경 `Secure=true` |
 | Request ID | server가 request마다 생성하고 `X-Request-ID` response header로 반환. client 제공 값은 재사용하지 않음 |
 | 관리자 | `users.role`로 판별. 초기 관리자 bootstrap은 [Architecture](../ARCHITECTURE.md)의 Auth 계약을 따름 |
-| 시간 | DB는 UTC, API는 UTC ISO 8601(`Z`) 사용 |
+| 시간 | DB와 API는 UTC ISO 8601(`Z`) 사용. HTML의 사용자 표시만 UI 계약에 따라 KST로 변환 |
 | 내부정보 | SQL 오류, 전체 stack, key, cookie, 내부 `error_message`를 API·화면에 노출하지 않음 |
 
 ## 2. HTML·폼 경로

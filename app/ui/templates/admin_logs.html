@@ -24,10 +24,14 @@
 
   {# Scrollable operational log table when records are available. #}
   {% if items %}
+  <p id="admin-table-scroll-hint" class="admin-table-scroll-hint">
+    표를 좌우로 스크롤하면 모든 열을 확인할 수 있습니다.
+  </p>
   <div
     class="admin-table-container"
     role="region"
     aria-labelledby="admin-table-caption"
+    aria-describedby="admin-table-scroll-hint"
     tabindex="0"
   >
     <table class="admin-table">
@@ -57,7 +61,7 @@
           <td class="admin-table__cell--compact">{{ item.chat_exchange_id }}</td>
           <td class="admin-table__cell--compact">
             <time datetime="{{ item.created_at.isoformat() }}">
-              {{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC
+              {{ item.created_at | kst_datetime }}
             </time>
           </td>
           <td class="admin-table__cell--request-id">{{ item.request_id }}</td>

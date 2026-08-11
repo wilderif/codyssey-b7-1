@@ -214,7 +214,6 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
     form = _find_tag(collector, "form", "id", "chat-form")
     label = _find_tag(collector, "label", "for", "chat-message")
     textarea = _find_tag(collector, "textarea", "id", "chat-message")
-    help_text = _find_tag(collector, "p", "id", "chat-input-help")
     character_count = _find_tag(collector, "span", "id", "chat-character-count")
     error = _find_tag(collector, "p", "id", "chat-form-error")
     submit = _find_tag(collector, "button", "id", "chat-submit")
@@ -228,15 +227,14 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
     assert "아직 대화 기록이 없습니다." in html
     assert "novalidate" in form
     assert label is not None
+    assert textarea["rows"] == "2"
     assert textarea["maxlength"] == "1000"
-    assert textarea["aria-describedby"] == (
-        "chat-input-help chat-character-count chat-form-error"
-    )
+    assert textarea["aria-describedby"] == "chat-character-count chat-form-error"
     assert "required" in textarea
-    assert help_text is not None
     assert "role" not in character_count
     assert "aria-live" not in character_count
-    assert "Enter로 전송 · Shift+Enter로 줄바꿈" in html
+    assert "chat-input-help" not in html
+    assert "Enter로 전송" not in html
     assert "0 / 1000" in html
     assert error["role"] == "alert"
     assert "hidden" in error
@@ -285,7 +283,6 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         "chat-history",
         "chat-empty-state",
         "chat-form-error",
-        "chat-input-help",
         "chat-character-count",
         "chat-pending-template",
     ):
@@ -334,7 +331,9 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
     for input_contract in (
         "MAX_MESSAGE_LENGTH = 1000",
         'COARSE_POINTER_QUERY = "(pointer: coarse)"',
-        "function updateInputHelp",
+        'timeZone: "Asia/Seoul"',
+        "function formatKstTimestamp",
+        "KST",
         "function updateCharacterCount",
         "function handleMessageKeydown",
         'event.key !== "Enter"',
@@ -353,6 +352,8 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
     assert ".cookie" not in script
     assert "localStorage" not in script
     assert "sessionStorage" not in script
+    assert "chat-input-help" not in script
+    assert "updateInputHelp" not in script
 
     success_renderer = script[
         script.index("function renderSuccess") : script.index("function renderFailure")
@@ -360,7 +361,7 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
     assert 'removeAttribute("aria-live")' not in success_renderer
 
 
-def test_chat_template_renders_history_oldest_first_with_status_and_utc_time() -> None:
+def test_chat_template_renders_history_oldest_first_with_status_and_kst_time() -> None:
     newest = _history_item(
         chat_exchange_id=22,
         question="최신 실패 질문",
@@ -411,7 +412,9 @@ def test_chat_template_renders_history_oldest_first_with_status_and_utc_time() -
     assert "성공" not in html
     assert oldest.created_at.isoformat() in rendered_datetimes
     assert newest.created_at.isoformat() in rendered_datetimes
-    assert html.count("UTC") >= 2
+    assert "2026-08-09 17:30:12 KST" in html
+    assert "2026-08-11 00:45:00 KST" in html
+    assert html.count("KST") >= 2
 
 
 @pytest.mark.parametrize(
@@ -484,7 +487,6 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
         ".chat-composer",
         ".chat-form",
         ".chat-form__meta",
-        ".chat-form__help",
         ".chat-form__counter",
     ):
         assert expected_selector in styles
@@ -516,6 +518,7 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     )
 
     responsive_styles = styles[styles.index("@media (max-width:") :]
+    assert "min-height: 4.75rem" in responsive_styles
     assert any(
         selector in responsive_styles
         for selector in (
@@ -583,6 +586,10 @@ def test_admin_template_marks_cells_by_wrapping_behavior() -> None:
     assert html.count('class="admin-table__cell--compact"') == 7
     assert html.count('class="admin-table__cell--request-id"') == 1
     assert html.count('class="admin-table__cell--user-agent"') == 1
+    assert 'aria-describedby="admin-table-scroll-hint"' in html
+    assert "표를 좌우로 스크롤하면 모든 열을 확인할 수 있습니다." in html
+    assert "2026-08-11 14:56:00 KST" in html
+    assert 'datetime="2026-08-11T05:56:00+00:00"' in html
 
 
 def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
@@ -593,11 +600,14 @@ def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
         ".admin-main",
         ".admin-header",
         ".admin-header__description",
+        ".admin-table-scroll-hint",
         ".protected-nav--admin",
         ".protected-nav__link",
         ".protected-nav__logout",
         ".admin-table-container",
         ".admin-table-container:focus-visible",
+        ".admin-table-container::-webkit-scrollbar",
+        ".admin-table-container::-webkit-scrollbar-thumb",
         ".admin-table",
         ".admin-table caption",
         ".admin-table th",
@@ -615,6 +625,7 @@ def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
         "border-collapse: collapse",
         "vertical-align: top",
         "scrollbar-gutter: stable",
+        "scrollbar-color:",
         "white-space: nowrap",
         "min-width: 16rem",
         "min-width: 20rem",
