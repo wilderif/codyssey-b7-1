@@ -8,9 +8,6 @@ FastAPI, SQLite, OpenAI API를 하나의 web application으로 통합한 사용�
 
 핵심 사용자 흐름은 **로그인 → 질문 입력 → AI 응답 표시 → 내 대화 로그 조회**입니다. 로그인 사용자가 질문하면 server가 최근 대화 문맥과 함께 OpenAI API를 호출하고 결과를 저장하며, 사용자는 같은 Chat 화면 또는 본인 기록 API에서 누적된 대화를 확인합니다.
 
-> [!IMPORTANT]
-> 현재 Chat JSON API, Auth Service·session helper, DB 저장, 본인 기록 API와 관리자 로그 화면은 구현되어 있습니다. Login·회원가입·Chat Browser 화면을 담당할 `app/ui/router.py`와 관련 template·static asset은 **추후 작성 예정**이므로, 아직 Browser의 전체 핵심 흐름을 end-to-end로 실행할 수는 없습니다.
-
 ## 주요 기능과 구현 상태
 
 | 기능 | 상태 | 설명 |
@@ -19,9 +16,9 @@ FastAPI, SQLite, OpenAI API를 하나의 web application으로 통합한 사용�
 | Chat JSON API | 구현 | 질문 검증, 최근 성공 대화 최대 5건의 문맥 구성, OpenAI 호출, 성공·실패 저장 |
 | 내 대화 기록 API | 구현 | 로그인 사용자의 전체 기록 및 단일 기록을 소유권 조건으로 조회 |
 | 관리자 운영 기록 | 구현 | 관리자만 `/admin/logs`에서 안전한 운영 metadata를 읽기 전용으로 조회 |
-| Login·회원가입 UI | 추후 작성 예정 | `/signup`, `/login`, `/logout` form route와 template |
-| Chat UI | 추후 작성 예정 | `/chat` 화면, 질문 전송 JavaScript, 본인 기록 rendering |
-| 배포 URL | 추후 작성 예정 | Railway 배포 완료 후 public HTTPS URL 추가 |
+| Login·회원가입 UI | 구현 | `/signup`, `/login`, `/logout` form route와 server-rendered template |
+| Chat UI | 구현 | `/chat` history rendering, 질문 전송 JavaScript, 오류·Loading 상태 처리 |
+| Railway 배포 | 구현 | [Public HTTPS service](https://codyssey-b7-1-production.up.railway.app), persistent SQLite Volume, health smoke test |
 
 ## 기술 구성
 
@@ -56,11 +53,12 @@ cp .env.example .env
 | `OPENAI_API_KEY` | 없음 | OpenAI API 인증 secret. Chat 사용 시 필수 |
 | `OPENAI_MODEL` | `gpt-5-nano` | 답변 생성 model |
 | `OPENAI_TIMEOUT_SECONDS` | `30` | OpenAI request timeout |
-| `DATABASE_URL` | `sqlite:///./data/chatbot.db` | SQLAlchemy DB 연결 URL |
+| `DATABASE_URL` | `sqlite:///./data/chatbot.db` | Local SQLAlchemy DB 연결 URL. Production에서는 명시적 설정 필수 |
 | `APP_ENV` | `local` | `local` 또는 `production` |
 | `LOG_LEVEL` | `INFO` | Application log level |
 | `ADMIN_USERNAME` | `admin` | 초기 관리자 username |
 | `ADMIN_INITIAL_PASSWORD` | 없음 | 관리자 역할 계정이 없는 DB의 최초 실행 시 필수 |
+| `PORT` | 없음 | Railway Variables에서 직접 설정하는 HTTP server port |
 
 ### 3. Application 실행
 
@@ -68,7 +66,7 @@ cp .env.example .env
 uv run uvicorn app.main:app --reload
 ```
 
-기본 주소는 `http://127.0.0.1:8000`이며, 현재 구현을 바로 확인할 수 있는 public endpoint는 `GET /health`입니다.
+기본 주소는 `http://127.0.0.1:8000`입니다. Browser에서 `/signup` 또는 `/login`으로 사용자 흐름을 시작하고, process 상태는 `GET /health`로 확인합니다.
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -78,6 +76,20 @@ curl http://127.0.0.1:8000/health
 {"status":"ok"}
 ```
 
+### 4. Railway 배포와 확인
+
+Production에서는 `APP_ENV=production`, `DATABASE_URL=sqlite:////data/chatbot.db`와 secret을 Railway Variables에 명시하고, Volume을 `/data`에 mount합니다. PR #46부터 production에서 `DATABASE_URL`을 직접 설정하지 않으면 ephemeral SQLite file로 fallback하지 않고 application 시작을 거부합니다.
+
+```bash
+uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+- 배포 URL: [https://codyssey-b7-1-production.up.railway.app](https://codyssey-b7-1-production.up.railway.app)
+- Healthcheck: `GET /health`
+- Process smoke test: 2026-08-11 외부 network에서 `GET /health`의 `{"status":"ok"}` 응답 확인
+
+자세한 Railway Variables와 persistent Volume 구성은 [`docs/spec/DEPLOYMENT.md`](docs/spec/DEPLOYMENT.md)를 참고합니다.
+
 ## Architecture
 
 Application은 하나의 FastAPI process 안에서 책임별 module을 분리한 modular monolith입니다. 기본 의존 방향은 `Main·Router → Service → Repository → Core`입니다.
@@ -85,7 +97,7 @@ Application은 하나의 FastAPI process 안에서 책임별 module을 분리한
 ```mermaid
 flowchart LR
     Browser[Browser]
-    UI[UI Router<br/>추후 작성 예정]
+    UI[UI Router]
     ChatRouter[Chat Router]
     AdminRouter[Admin Router]
     Auth[Auth Service / Dependency]
@@ -95,11 +107,11 @@ flowchart LR
     DB[(SQLite)]
     OpenAI[OpenAI API]
 
-    Browser -. Login·Chat 화면 .-> UI
+    Browser --> UI
     Browser --> ChatRouter
     Browser --> AdminRouter
-    UI -.-> Auth
-    UI -.-> ChatService
+    UI --> Auth
+    UI --> ChatService
     ChatRouter --> Auth
     ChatRouter --> ChatService
     AdminRouter --> Auth
@@ -110,13 +122,11 @@ flowchart LR
     ChatService --> OpenAI
 ```
 
-점선은 아직 구현되지 않은 UI 경로를 나타냅니다.
-
 ### 파일별 역할
 
 | 파일·디렉토리 | 역할 |
 | --- | --- |
-| `app/main.py` | FastAPI application 생성, Session·Request ID middleware와 exception handler 설정, Chat·Admin router 등록, DB table·초기 관리자 준비, `/health` 등록 |
+| `app/main.py` | FastAPI application 생성, Session·Request ID middleware와 exception handler 설정, Chat·Admin·UI router 등록, `/static` mount, DB table·초기 관리자 준비, `/health` 등록 |
 | `app/core/config.py` | Environment variable loading, type 변환과 environment별 validation |
 | `app/core/database.py` | SQLAlchemy `Base`, engine, `SessionLocal`, 요청별 DB session과 table 초기화 |
 | `app/core/security.py` | PBKDF2-SHA256 password hash와 constant-time 검증 |
@@ -134,8 +144,9 @@ flowchart LR
 | `app/chat/repository.py` | 사용자별 ChatExchange 저장·조회 query |
 | `app/admin/router.py` | 관리자 전용 `/admin/logs` HTML route와 접근 제어 연결 |
 | `app/admin/service.py`, `app/admin/repository.py` | 관리자 화면용 안전한 운영 metadata projection과 read-only query |
-| `app/ui/templates/admin_logs.html` | 현재 구현된 최소 관리자 로그 template |
-| `app/ui/router.py` | **추후 작성 예정**: Login·회원가입·logout·Chat 화면 route |
+| `app/ui/router.py` | Login·회원가입·logout form 처리, session 생성·삭제, 본인 Chat history rendering |
+| `app/ui/templates/` | 회원가입·Login·Chat·관리자 화면과 공통 base·navigation template |
+| `app/ui/static/` | 공통 responsive style, Chat interaction, Browser history 복원 처리와 favicon |
 | `scripts/check_logs.sql` | 사용자 역할, 최근·실패 대화, 사용자별 건수와 운영 metadata 검증 query |
 
 ### Router 책임과 endpoint
@@ -145,18 +156,20 @@ flowchart LR
 | `app/auth` | Auth는 HTTP router를 두지 않고 User·session·권한 domain interface를 제공합니다. Browser Auth form은 UI Router가 Auth Service를 호출하는 구조입니다. | 직접 소유 endpoint 없음 | Domain 구현 |
 | `app/chat/router.py` | 로그인 사용자 ID와 DB session을 Chat Service에 전달하고 결과·오류를 JSON으로 변환합니다. | `POST /api/chat`, `GET /api/chat-exchanges`, `GET /api/chat-exchanges/{chat_exchange_id}` | 구현 |
 | `app/admin/router.py` | 관리자 권한을 확인하고 운영 metadata를 HTML로 rendering합니다. | `GET /admin/logs` | 구현 |
-| `app/ui/router.py` | Auth form 처리, session 생성·삭제, 본인 대화 기록과 Chat 화면 rendering을 담당합니다. | `GET /`, `GET·POST /signup`, `GET·POST /login`, `POST /logout`, `GET /chat` | 추후 작성 예정 |
+| `app/ui/router.py` | Auth form 처리, session 생성·삭제, 본인 대화 기록과 Chat 화면 rendering을 담당합니다. | `GET /`, `GET·POST /signup`, `GET·POST /login`, `POST /logout`, `GET /chat` | 구현 |
 | `app/main.py` | Process health 확인 endpoint를 등록합니다. | `GET /health` | 구현 |
 
-Static asset은 UI 구현 시 `app/main.py`에서 `/static`에 mount할 예정입니다.
+Static asset은 `app/main.py`에서 `/static`에 mount하며 모든 화면이 공통 CSS를, Chat 화면이 Chat JavaScript를 사용합니다.
 
 ## 인증과 비로그인 접근 제한
 
-현재 비로그인 접근 제한 대상은 `POST /api/chat`, 두 `/api/chat-exchanges...` 조회 API와 `/admin/logs`입니다. 향후 `/chat` 화면도 같은 제한을 적용하며, `/health`, `/signup`, `/login`, `/static/{path}`는 공개 대상으로 유지합니다. `/admin/logs`는 로그인 외에 `users.role=admin` 권한도 필요합니다.
+비로그인 접근 제한 대상은 `/chat`, `POST /api/chat`, 두 `/api/chat-exchanges...` 조회 API와 `/admin/logs`입니다. `/`는 인증 상태에 따라 `/chat` 또는 `/login`으로 이동하며, `/health`, `/signup`, `/login`, `/logout`, `/static/{path}`는 인증 없이 접근할 수 있습니다. `/logout`은 session 유무와 관계없이 session data를 제거하고 `/login`으로 이동하며, `/admin/logs`는 로그인 외에 `users.role=admin` 권한도 필요합니다.
 
 대화에는 사용자 질문·답변이라는 개인별 정보가 저장되고, AI 호출은 외부 API 비용과 남용 위험을 발생시키므로 사용자 식별과 소유권 검사가 필요합니다. 따라서 비로그인 사용자의 질문·기록 접근을 차단해 다른 사용자의 기록 노출을 막고, 요청을 책임 있는 사용자와 연결하는 것을 보안·운영 정책의 근거로 삼습니다.
 
 인증은 JWT가 아닌 Starlette의 signed session cookie를 사용합니다. Session에는 사용자 ID만 저장하며 만료 시간은 8시간이고, cookie에는 `HttpOnly`, `SameSite=Lax`, production 환경의 `Secure` 설정을 적용합니다.
+
+보호된 HTML route와 JSON API는 session의 사용자 ID를 실제 DB User와 대조합니다. User가 삭제된 stale session은 즉시 제거하며, HTML route는 `/login`으로 이동하고 JSON API는 Chat·OpenAI 처리 전에 `401 not_authenticated`를 반환합니다.
 
 ## API
 
@@ -164,13 +177,21 @@ Static asset은 UI 구현 시 `app/main.py`에서 `/static`에 mount할 예정�
 
 | Method | Path | 인증 | Request | Success response |
 | --- | --- | --- | --- | --- |
+| `GET` | `/` | 상태 확인 | 없음 | `303 /chat` 또는 `303 /login` |
+| `GET` | `/signup` | 상태 확인 | 없음 | 비로그인 `200 text/html` · 로그인 `303 /chat` |
+| `POST` | `/signup` | 불필요 | Form `username`, `password` | `303 /login` |
+| `GET` | `/login` | 상태 확인 | 없음 | 비로그인 `200 text/html` · 로그인 `303 /chat` |
+| `POST` | `/login` | 불필요 | Form `username`, `password` | `303 /chat` |
+| `POST` | `/logout` | 상태 무관 | Form 제출 | `303 /login` |
+| `GET` | `/chat` | 필수 | 없음 | `200 text/html` |
 | `POST` | `/api/chat` | 필수 | JSON body `{"message": string}` | `200 ChatResponse` |
 | `GET` | `/api/chat-exchanges` | 필수 | 없음 | `200 ChatExchangeResponse[]` |
 | `GET` | `/api/chat-exchanges/{chat_exchange_id}` | 필수 | Integer path parameter | `200 ChatExchangeResponse` |
 | `GET` | `/admin/logs` | 관리자 | 없음 | `200 text/html` |
+| `GET` | `/static/{path}` | 불필요 | Static asset path | `200 static asset` |
 | `GET` | `/health` | 불필요 | 없음 | `200 {"status":"ok"}` |
 
-보호된 API 예시는 유효한 signed session cookie가 있다는 전제입니다. Login UI가 아직 연결되지 않았으므로 현재 Browser에서 session을 생성하는 공개 route는 **추후 작성 예정**입니다.
+보호된 API 예시는 Login form에서 생성한 유효한 signed session cookie가 있다는 전제입니다. Browser Chat 화면은 같은 session으로 `POST /api/chat`을 호출하고 성공한 교환을 화면 아래에 이어 붙입니다.
 
 ### 질문 생성 요청
 
@@ -357,9 +378,9 @@ Script는 사용자 역할, 최근 ChatExchange 20건, 실패 record 불변식, 
 
 | 구성원 | GitHub | 담당 기능 | 현재 작업과 증빙 |
 | --- | --- | --- | --- |
-| 김대웅 | [`Daeung-03`](https://github.com/Daeung-03) | `app/main.py`, Auth, request ID, password·session 보안 | User·Auth 기반 [#4](https://github.com/wilderif/codyssey-b7-1/pull/4)·[#17](https://github.com/wilderif/codyssey-b7-1/pull/17), 회원가입·login Service [#19](https://github.com/wilderif/codyssey-b7-1/pull/19)·[#24](https://github.com/wilderif/codyssey-b7-1/pull/24), application·session 조립 [#25](https://github.com/wilderif/codyssey-b7-1/pull/25)·[#34](https://github.com/wilderif/codyssey-b7-1/pull/34) |
-| 이상헌 | [`shannonlee-dev`](https://github.com/shannonlee-dev) | Chat, Admin, DB·Config, AI 연동 | DB 기반 [#1](https://github.com/wilderif/codyssey-b7-1/pull/1)·[#2](https://github.com/wilderif/codyssey-b7-1/pull/2)·[#6](https://github.com/wilderif/codyssey-b7-1/pull/6), Chat 문맥·Service·API [#7](https://github.com/wilderif/codyssey-b7-1/pull/7)·[#9](https://github.com/wilderif/codyssey-b7-1/pull/9)·[#18](https://github.com/wilderif/codyssey-b7-1/pull/18), Admin·log 조회 [#21](https://github.com/wilderif/codyssey-b7-1/pull/21)·[#23](https://github.com/wilderif/codyssey-b7-1/pull/23)·[#26](https://github.com/wilderif/codyssey-b7-1/pull/26) |
-| 김우종 | [`wilderif`](https://github.com/wilderif) | UI/FE, 화면 계약, 실행·배포 문서 | Project scaffold·개발 도구 [#8](https://github.com/wilderif/codyssey-b7-1/pull/8), PR 품질·API 문서 [#11](https://github.com/wilderif/codyssey-b7-1/pull/11), Frontend UI 계약 [#13](https://github.com/wilderif/codyssey-b7-1/pull/13). UI Router·화면 구현은 **추후 작성 예정** |
+| 김대웅 | [`Daeung-03`](https://github.com/Daeung-03) | `app/main.py`, Auth, request ID, password·session 보안 | User·Auth 기반 [#4](https://github.com/wilderif/codyssey-b7-1/pull/4)·[#17](https://github.com/wilderif/codyssey-b7-1/pull/17), 회원가입·login Service [#19](https://github.com/wilderif/codyssey-b7-1/pull/19)·[#24](https://github.com/wilderif/codyssey-b7-1/pull/24), application·session 조립 [#25](https://github.com/wilderif/codyssey-b7-1/pull/25)·[#34](https://github.com/wilderif/codyssey-b7-1/pull/34), Frontend UI 구현 계약 [#36](https://github.com/wilderif/codyssey-b7-1/pull/36) |
+| 이상헌 | [`shannonlee-dev`](https://github.com/shannonlee-dev) | Chat, Admin, DB·Config, AI 연동 | DB 기반 [#1](https://github.com/wilderif/codyssey-b7-1/pull/1)·[#2](https://github.com/wilderif/codyssey-b7-1/pull/2)·[#6](https://github.com/wilderif/codyssey-b7-1/pull/6), Chat 문맥·Service·API [#7](https://github.com/wilderif/codyssey-b7-1/pull/7)·[#9](https://github.com/wilderif/codyssey-b7-1/pull/9)·[#18](https://github.com/wilderif/codyssey-b7-1/pull/18), Admin·log 조회 [#21](https://github.com/wilderif/codyssey-b7-1/pull/21)·[#23](https://github.com/wilderif/codyssey-b7-1/pull/23)·[#26](https://github.com/wilderif/codyssey-b7-1/pull/26), Production Config·JSON Auth hardening과 evaluation test [#46](https://github.com/wilderif/codyssey-b7-1/pull/46) |
+| 김우종 | [`wilderif`](https://github.com/wilderif) | UI/FE, 화면 계약, 실행·배포 문서 | Project scaffold·개발 도구 [#8](https://github.com/wilderif/codyssey-b7-1/pull/8), PR 품질·API 문서 [#11](https://github.com/wilderif/codyssey-b7-1/pull/11), Frontend UI 계약 [#13](https://github.com/wilderif/codyssey-b7-1/pull/13), Auth·Chat·Admin UI 구현과 통합 [#39](https://github.com/wilderif/codyssey-b7-1/pull/39)~[#43](https://github.com/wilderif/codyssey-b7-1/pull/43), UI 품질·Browser history 보완 [#44](https://github.com/wilderif/codyssey-b7-1/pull/44)·[#45](https://github.com/wilderif/codyssey-b7-1/pull/45) |
 
 세부 module 소유권은 [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md#module-책임과-소유권)를 참고합니다.
 
@@ -372,7 +393,7 @@ Script는 사용자 역할, 최근 ChatExchange 20건, 실패 record 불변식, 
 - [`main` commit·merge history](https://github.com/wilderif/codyssey-b7-1/commits/main/)
 - [Branch 목록](https://github.com/wilderif/codyssey-b7-1/branches)
 
-2026-08-10 기준으로 `main`에는 PR #1~#29와 #31~#36의 merge commit이 포함되어 있습니다. [PR #30](https://github.com/wilderif/codyssey-b7-1/pull/30)은 module 경계를 복잡하게 만드는 접근을 채택하지 않기로 결정해 merge 없이 닫혔으며, 이 상태도 위 PR log에서 확인할 수 있습니다.
+2026-08-11 기준으로 `main`에는 PR #1~#29와 #31~#46의 merge commit이 포함되어 있습니다. [PR #30](https://github.com/wilderif/codyssey-b7-1/pull/30)은 module 경계를 복잡하게 만드는 접근을 채택하지 않기로 결정해 merge 없이 닫혔으며, 이 상태도 위 PR log에서 확인할 수 있습니다.
 
 README 설명과 실제 구현·이력을 다음처럼 대조할 수 있습니다.
 
@@ -386,6 +407,8 @@ README 설명과 실제 구현·이력을 다음처럼 대조할 수 있습니�
 | Admin log 조회·화면 | [`app/admin`](https://github.com/wilderif/codyssey-b7-1/tree/main/app/admin), [`admin_logs.html`](https://github.com/wilderif/codyssey-b7-1/blob/main/app/ui/templates/admin_logs.html) | [#21](https://github.com/wilderif/codyssey-b7-1/pull/21), [#23](https://github.com/wilderif/codyssey-b7-1/pull/23), [#29](https://github.com/wilderif/codyssey-b7-1/pull/29) | [`a134516`](https://github.com/wilderif/codyssey-b7-1/commit/a134516), [`745bbdd`](https://github.com/wilderif/codyssey-b7-1/commit/745bbdd) |
 | SQL 기반 log 검증 | [`scripts/check_logs.sql`](https://github.com/wilderif/codyssey-b7-1/blob/main/scripts/check_logs.sql) | [#26](https://github.com/wilderif/codyssey-b7-1/pull/26) | [`e19d91d`](https://github.com/wilderif/codyssey-b7-1/commit/e19d91d) |
 | UI 화면 계약 | [`docs/spec/ui/UI.md`](https://github.com/wilderif/codyssey-b7-1/blob/main/docs/spec/ui/UI.md) | [#13](https://github.com/wilderif/codyssey-b7-1/pull/13), [#36](https://github.com/wilderif/codyssey-b7-1/pull/36) | [`fc66686`](https://github.com/wilderif/codyssey-b7-1/commit/fc66686), [`f9c8c84`](https://github.com/wilderif/codyssey-b7-1/commit/f9c8c84) |
+| Auth·Chat·Admin UI 구현 | [`app/ui`](https://github.com/wilderif/codyssey-b7-1/tree/main/app/ui), [`app/main.py`](https://github.com/wilderif/codyssey-b7-1/blob/main/app/main.py) | [#39](https://github.com/wilderif/codyssey-b7-1/pull/39), [#40](https://github.com/wilderif/codyssey-b7-1/pull/40), [#41](https://github.com/wilderif/codyssey-b7-1/pull/41), [#42](https://github.com/wilderif/codyssey-b7-1/pull/42), [#43](https://github.com/wilderif/codyssey-b7-1/pull/43), [#44](https://github.com/wilderif/codyssey-b7-1/pull/44), [#45](https://github.com/wilderif/codyssey-b7-1/pull/45) | [`cbf776f`](https://github.com/wilderif/codyssey-b7-1/commit/cbf776f), [`547e652`](https://github.com/wilderif/codyssey-b7-1/commit/547e652), [`6275f4d`](https://github.com/wilderif/codyssey-b7-1/commit/6275f4d), [`48fc6ac`](https://github.com/wilderif/codyssey-b7-1/commit/48fc6ac), [`629993e`](https://github.com/wilderif/codyssey-b7-1/commit/629993e), [`afa1a89`](https://github.com/wilderif/codyssey-b7-1/commit/afa1a89), [`0b4c7d4`](https://github.com/wilderif/codyssey-b7-1/commit/0b4c7d4) |
+| Production Config·stale session hardening | [`app/core/config.py`](https://github.com/wilderif/codyssey-b7-1/blob/main/app/core/config.py), [`app/auth/dependencies.py`](https://github.com/wilderif/codyssey-b7-1/blob/main/app/auth/dependencies.py), [`tests/evaluation`](https://github.com/wilderif/codyssey-b7-1/tree/main/tests/evaluation) | [#46](https://github.com/wilderif/codyssey-b7-1/pull/46) | [`c0d4c36`](https://github.com/wilderif/codyssey-b7-1/commit/c0d4c36) |
 
 ## 검증
 
@@ -395,13 +418,5 @@ uv run ruff format --check .
 uv run pyright
 uv run pytest
 ```
-
-## 추후 작성 예정
-
-- `app/ui/router.py`, `signup.html`, `login.html`, `chat.html`, 공통 CSS와 Chat JavaScript
-- `app/main.py`의 UI Router 등록과 `/static` mount
-- Login부터 내 대화 로그 조회까지의 Browser end-to-end test와 화면 capture
-- Railway 실제 배포 URL과 배포 smoke test 결과
-- UI 구현 완료 후 구성원별 최종 작업 내역과 관련 PR link 갱신
 
 상세 요구사항과 설계 계약은 [`docs/spec/SPEC.md`](docs/spec/SPEC.md)에서 확인할 수 있습니다.
