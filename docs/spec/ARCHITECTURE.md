@@ -17,34 +17,6 @@ FastAPI (Main + Auth + UI + Chat + Admin + Core)
    v                                      v
 SQLite                                OpenAI API
 ```
-
-## 인증 방식 결정
-
-### 현재 선택: Session
-
-Browser와 FastAPI가 같은 application에서 동작하므로, 서명된 session cookie로 로그인 사용자 ID만
-전달합니다. JWT를 포함한 token 인증은 현재 제공하지 않습니다.
-
-### Session을 선택한 이유
-
-- Server-rendered form과 Browser 화면 흐름에 자연스럽게 연결됩니다.
-- `HttpOnly`, `SameSite=Lax`, production `Secure` cookie 설정으로 Browser JavaScript에 session
-  정보를 노출하지 않습니다.
-- Auth module이 사용자 조회와 관리자 권한을 server에서 일관되게 판단할 수 있습니다.
-
-### Token 기반 인증이 필요한 경우
-
-- mobile app이나 외부 client가 Browser session 없이 API를 호출해야 하는 경우
-- frontend와 API가 서로 다른 origin에서 독립 배포되는 경우
-- service-to-service API처럼 cookie session을 공유할 수 없는 호출이 필요한 경우
-
-### Token 사용 시 방식
-
-Token 도입이 승인되면 현재 Session 계약을 병행하지 않고 API 계약을 함께 갱신합니다. Client는
-`Authorization: Bearer <access token>`으로 짧은 수명의 access token을 전달하고, token에는 사용자
-식별자·권한·만료 정보를 포함합니다. refresh, revoke, logout, CORS와 token 보관 방식은 도입 시점의
-보안 요구사항에 맞춰 별도 계약으로 정의합니다.
-
 ## 주요 Component
 
 | Component | 역할 |
