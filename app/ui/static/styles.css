@@ -240,7 +240,8 @@ button:disabled {
   gap: var(--space-2);
 }
 
-.chat-nav__link {
+.chat-nav__link,
+.admin-nav__link {
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
@@ -256,7 +257,8 @@ button:disabled {
   text-decoration: none;
 }
 
-.chat-nav__link:hover {
+.chat-nav__link:hover,
+.admin-nav__link:hover {
   background: var(--color-primary);
   color: #ffffff;
 }
@@ -463,6 +465,18 @@ button:disabled {
   color: var(--color-muted);
 }
 
+.admin-nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-nav__logout {
+  margin: 0;
+}
+
 .admin-table-container {
   width: 100%;
   min-width: 0;
@@ -582,6 +596,20 @@ button:disabled {
   .admin-main {
     gap: var(--space-4);
     padding: var(--space-4);
+  }
+
+  .admin-nav {
+    align-items: stretch;
+  }
+
+  .admin-nav__link,
+  .admin-nav__logout {
+    min-width: 0;
+    flex: 1 1 8rem;
+  }
+
+  .admin-nav__logout button {
+    width: 100%;
   }
 
   .admin-table-container {

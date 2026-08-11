@@ -6,7 +6,7 @@
     <title>{% block page_title %}Codyssey{% endblock %}</title>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
-  <body>
+  <body{% block body_class %}{% endblock %}>
     <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     {% block content %}{% endblock %}
   </body>
