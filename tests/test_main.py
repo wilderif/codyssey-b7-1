@@ -45,6 +45,19 @@ def _settings(
     return Settings.model_validate(values)
 
 
+def _add_session_test_routes(application: FastAPI) -> None:
+    @application.post("/_test/session")
+    def set_session(request: Request) -> dict[str, str]:
+        request.session["user_id"] = 42
+        return {"status": "created"}
+
+    @application.get("/api/_test/session-user")
+    def get_session_user(
+        user_id: Annotated[int, Depends(get_current_user_id)],
+    ) -> dict[str, int]:
+        return {"user_id": user_id}
+
+
 @pytest.fixture
 def main_module(monkeypatch: pytest.MonkeyPatch) -> Generator[ModuleType, None, None]:
     root_logger = logging.getLogger()
@@ -52,6 +65,7 @@ def main_module(monkeypatch: pytest.MonkeyPatch) -> Generator[ModuleType, None, 
     monkeypatch.setattr(config_module, "settings", _settings())
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
+    monkeypatch.setattr(module, "init_db", lambda: None)
     monkeypatch.setattr(module, "SessionLocal", lambda: nullcontext(object()))
     monkeypatch.setattr(module, "ensure_initial_admin", lambda **_kwargs: None)
     try:
@@ -77,6 +91,37 @@ def test_main_import_fails_safely_without_session_secret(
 
     assert "None" not in str(captured.value)
     sys.modules.pop("app.main", None)
+
+
+def test_create_app_sets_configured_logging_level(main_module: ModuleType) -> None:
+    main_module.create_app(_settings(log_level="WARNING"))
+
+    assert logging.getLogger().level == logging.WARNING
+
+
+def test_create_app_registers_ui_router_once(main_module: ModuleType) -> None:
+    application = main_module.create_app(_settings())
+
+    matching_routes = [
+        route
+        for route in application.routes
+        if getattr(route, "original_router", None) is main_module.ui_router
+    ]
+
+    assert len(matching_routes) == 1
+
+
+def test_create_app_mounts_static_files_once(main_module: ModuleType) -> None:
+    application = main_module.create_app(_settings())
+
+    matching_routes = [
+        route
+        for route in application.routes
+        if getattr(route, "path", None) == "/static"
+    ]
+
+    assert len(matching_routes) == 1
+    assert matching_routes[0].name == "static"
 
 
 def test_health_initializes_registered_models_before_serving_requests(
@@ -176,11 +221,9 @@ def test_admin_bootstrap_failure_closes_session_and_stops_startup(
 )
 def test_session_cookie_security_attributes_follow_environment(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
     app_env: str,
     secure_expected: bool,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings(app_env=app_env))
     _add_session_test_routes(application)
 
@@ -198,9 +241,7 @@ def test_session_cookie_security_attributes_follow_environment(
 
 def test_tampered_session_cookie_is_not_used_for_authentication(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
     _add_session_test_routes(application)
 
@@ -219,47 +260,15 @@ def test_tampered_session_cookie_is_not_used_for_authentication(
     }
 
 
-def test_create_app_sets_configured_logging_level(main_module: ModuleType) -> None:
-    main_module.create_app(_settings(log_level="WARNING"))
-
-    assert logging.getLogger().level == logging.WARNING
-
-
-def test_create_app_registers_ui_router_once(main_module: ModuleType) -> None:
-    application = main_module.create_app(_settings())
-
-    matching_routes = [
-        route
-        for route in application.routes
-        if getattr(route, "original_router", None) is main_module.ui_router
-    ]
-
-    assert len(matching_routes) == 1
-
-
-def test_create_app_mounts_static_files_once(main_module: ModuleType) -> None:
-    application = main_module.create_app(_settings())
-
-    matching_routes = [
-        route
-        for route in application.routes
-        if getattr(route, "path", None) == "/static"
-    ]
-
-    assert len(matching_routes) == 1
-    assert matching_routes[0].name == "static"
-
-
 def test_static_assets_are_public_and_have_expected_content_types(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
 
     with TestClient(application) as client:
         stylesheet_response = client.get("/static/styles.css")
         script_response = client.get("/static/chat.js")
+        favicon_response = client.get("/static/favicon.svg")
 
     assert stylesheet_response.status_code == 200
     assert stylesheet_response.headers["content-type"].startswith("text/css")
@@ -267,13 +276,14 @@ def test_static_assets_are_public_and_have_expected_content_types(
     assert script_response.status_code == 200
     assert script_response.headers["content-type"].startswith("text/javascript")
     assert UUID(script_response.headers[REQUEST_ID_HEADER]).version == 4
+    assert favicon_response.status_code == 200
+    assert favicon_response.headers["content-type"].startswith("image/svg+xml")
+    assert UUID(favicon_response.headers[REQUEST_ID_HEADER]).version == 4
 
 
 def test_missing_static_asset_returns_404(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
 
     with TestClient(application) as client:
@@ -285,10 +295,8 @@ def test_missing_static_asset_returns_404(
 
 def test_server_rendered_auth_flow_uses_session_cookie(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
     db: Session,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
     application.dependency_overrides[get_db] = lambda: db
 
@@ -324,9 +332,7 @@ def test_server_rendered_auth_flow_uses_session_cookie(
 
 def test_unhandled_api_error_preserves_request_id_on_500_response(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
 
     @application.get("/api/_test/unhandled-error")
@@ -346,9 +352,7 @@ def test_unhandled_api_error_preserves_request_id_on_500_response(
 
 def test_unhandled_html_error_returns_safe_response_with_request_id(
     main_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
 
     @application.get("/_test/unhandled-html-error")
@@ -371,7 +375,6 @@ def test_chat_history_failure_uses_safe_html_error_boundary(
 ) -> None:
     from app.ui import router as ui_router_module
 
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
     application = main_module.create_app(_settings())
     db_session = object()
     application.dependency_overrides[require_authenticated_user] = lambda: (
@@ -398,16 +401,3 @@ def test_chat_history_failure_uses_safe_html_error_boundary(
     assert response.text == "서버 오류가 발생했습니다."
     assert "error_message" not in response.text
     assert UUID(response.headers[REQUEST_ID_HEADER]).version == 4
-
-
-def _add_session_test_routes(application: FastAPI) -> None:
-    @application.post("/_test/session")
-    def set_session(request: Request) -> dict[str, str]:
-        request.session["user_id"] = 42
-        return {"status": "created"}
-
-    @application.get("/api/_test/session-user")
-    def get_session_user(
-        user_id: Annotated[int, Depends(get_current_user_id)],
-    ) -> dict[str, int]:
-        return {"user_id": user_id}

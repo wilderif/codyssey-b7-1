@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
@@ -20,13 +19,31 @@ from app.auth.service import (
 from app.core.config import Settings
 from app.core.security import verify_password
 
+pytestmark = pytest.mark.usefixtures("isolated_env_file_directory")
 
-@pytest.fixture(autouse=True)
-def use_empty_env_file_directory(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+
+def _admin_settings(
+    *, username: str = "admin", password: str | None = None
+) -> Settings:
+    values: dict[str, object] = {"ADMIN_USERNAME": username}
+    if password is not None:
+        values["ADMIN_INITIAL_PASSWORD"] = password
+    return Settings.model_validate(values)
+
+
+def _assert_safe_failure_log(
+    caplog: pytest.LogCaptureFixture,
+    *,
+    reason: AdminBootstrapReason,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
+    records = [
+        record for record in caplog.records if record.name == service_module.__name__
+    ]
+    assert [record.getMessage() for record in records] == [
+        f"admin_bootstrap_failed reason={reason.value}"
+    ]
+    assert all(record.exc_info is None for record in records)
+    assert "Traceback" not in caplog.text
 
 
 def test_ensure_initial_admin_creates_hashed_admin_account(
@@ -208,19 +225,24 @@ def test_ensure_initial_admin_contains_lookup_error(
     _assert_safe_failure_log(caplog, reason=AdminBootstrapReason.DB_ERROR)
 
 
-def test_ensure_initial_admin_rolls_back_create_error(
+@pytest.mark.parametrize("failure_point", ["create", "commit"])
+def test_ensure_initial_admin_rolls_back_write_errors(
     monkeypatch: pytest.MonkeyPatch,
     db: Session,
     caplog: pytest.LogCaptureFixture,
+    failure_point: str,
 ) -> None:
-    sensitive_error = "INSERT password_hash database secret"
+    sensitive_error = f"{failure_point} failed with password_hash secret"
     app_settings = _admin_settings(password="initial-admin-password")
     monkeypatch.setattr(service_module, "hash_password", lambda _password: "hash")
 
-    def fail_create(**_kwargs: object) -> User:
+    def fail_write(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError(sensitive_error)
 
-    monkeypatch.setattr(service_module, "create_user", fail_create)
+    if failure_point == "create":
+        monkeypatch.setattr(service_module, "create_user", fail_write)
+    else:
+        monkeypatch.setattr(db, "commit", fail_write)
 
     with (
         caplog.at_level(logging.ERROR, logger=service_module.__name__),
@@ -234,55 +256,3 @@ def test_ensure_initial_admin_rolls_back_create_error(
     assert not db.in_transaction()
     assert db.scalar(select(func.count(User.id))) == 0
     _assert_safe_failure_log(caplog, reason=AdminBootstrapReason.DB_ERROR)
-
-
-def test_ensure_initial_admin_rolls_back_commit_error(
-    monkeypatch: pytest.MonkeyPatch,
-    db: Session,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    sensitive_error = "commit failed with password_hash secret"
-    app_settings = _admin_settings(password="initial-admin-password")
-    monkeypatch.setattr(service_module, "hash_password", lambda _password: "hash")
-
-    def fail_commit() -> None:
-        raise RuntimeError(sensitive_error)
-
-    monkeypatch.setattr(db, "commit", fail_commit)
-
-    with (
-        caplog.at_level(logging.ERROR, logger=service_module.__name__),
-        pytest.raises(AdminBootstrapError) as captured,
-    ):
-        ensure_initial_admin(db=db, app_settings=app_settings)
-
-    assert captured.value.reason == AdminBootstrapReason.DB_ERROR
-    assert sensitive_error not in str(captured.value)
-    assert sensitive_error not in caplog.text
-    assert not db.in_transaction()
-    assert db.scalar(select(func.count(User.id))) == 0
-    _assert_safe_failure_log(caplog, reason=AdminBootstrapReason.DB_ERROR)
-
-
-def _admin_settings(
-    *, username: str = "admin", password: str | None = None
-) -> Settings:
-    values: dict[str, object] = {"ADMIN_USERNAME": username}
-    if password is not None:
-        values["ADMIN_INITIAL_PASSWORD"] = password
-    return Settings.model_validate(values)
-
-
-def _assert_safe_failure_log(
-    caplog: pytest.LogCaptureFixture,
-    *,
-    reason: AdminBootstrapReason,
-) -> None:
-    records = [
-        record for record in caplog.records if record.name == service_module.__name__
-    ]
-    assert [record.getMessage() for record in records] == [
-        f"admin_bootstrap_failed reason={reason.value}"
-    ]
-    assert all(record.exc_info is None for record in records)
-    assert "Traceback" not in caplog.text

@@ -235,13 +235,17 @@ button:disabled {
 /* Fill the viewport with the Chat page layout. */
 .chat-page {
   display: flex;
+  height: 100vh;
+  height: 100dvh;
   min-width: 0;
-  min-height: 100vh;
+  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Separate the Chat header from conversation content. */
 .chat-header {
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
@@ -271,9 +275,8 @@ button:disabled {
   color: var(--color-muted);
 }
 
-/* Share navigation alignment across protected pages. */
-.chat-nav,
-.admin-nav {
+/* Share navigation alignment across authenticated pages. */
+.protected-nav {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -281,18 +284,17 @@ button:disabled {
 }
 
 /* Align Chat actions to the right on wide screens. */
-.chat-nav {
+.protected-nav--chat {
   justify-content: flex-end;
 }
 
 /* Allow Admin actions to wrap when needed. */
-.admin-nav {
+.protected-nav--admin {
   flex-wrap: wrap;
 }
 
 /* Present protected-page links as secondary buttons. */
-.chat-nav__link,
-.admin-nav__link {
+.protected-nav__link {
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
@@ -309,15 +311,13 @@ button:disabled {
 }
 
 /* Fill protected-page navigation links on hover. */
-.chat-nav__link:hover,
-.admin-nav__link:hover {
+.protected-nav__link:hover {
   background: var(--color-primary);
   color: #ffffff;
 }
 
 /* Remove default margins from logout forms. */
-.chat-nav__logout,
-.admin-nav__logout {
+.protected-nav__logout {
   margin: 0;
 }
 
@@ -335,14 +335,28 @@ button:disabled {
 /* Keep Chat content readable and fill remaining height. */
 .chat-main {
   width: min(100%, 56rem);
+  min-height: 0;
   flex: 1;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  overflow: hidden;
 }
 
 /* Stack conversation records in chronological display order. */
 .chat-history {
   display: grid;
   min-width: 0;
+  min-height: 0;
+  align-content: start;
   gap: var(--space-6);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Keep the scroll-region focus indicator close to the conversation edge. */
+.chat-history:focus-visible {
+  outline-offset: var(--space-1);
 }
 
 /* Share empty-state surfaces across protected pages. */
@@ -481,6 +495,31 @@ button:disabled {
   resize: vertical;
 }
 
+/* Pair concise keyboard guidance with the current character count. */
+.chat-form__meta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* De-emphasize persistent input guidance without hiding it. */
+.chat-form__help,
+.chat-form__counter {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+/* Keep the changing count stable and readable beside the helper. */
+.chat-form__counter {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Align the Chat submit action to the end edge. */
 .chat-form__actions {
   display: flex;
@@ -562,7 +601,8 @@ button:disabled {
 .admin-table td {
   border-bottom: 1px solid var(--color-border);
   padding: var(--space-3) var(--space-4);
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
   text-align: left;
   vertical-align: top;
 }
@@ -571,6 +611,25 @@ button:disabled {
 .admin-table th {
   background: var(--color-background);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Keep short identifiers and status values readable on one line. */
+.admin-table__cell--compact {
+  white-space: nowrap;
+}
+
+/* Reserve enough room for UUID segments to wrap only at natural boundaries. */
+.admin-table__cell--request-id {
+  min-width: 16rem;
+}
+
+/* Constrain verbose client metadata while still wrapping long technical tokens. */
+.admin-table td.admin-table__cell--user-agent {
+  width: 20rem;
+  min-width: 20rem;
+  max-width: 20rem;
+  overflow-wrap: anywhere;
 }
 
 /* Remove the final redundant row border. */
@@ -607,29 +666,25 @@ button:disabled {
   }
 
   /* Stretch and wrap protected-page navigation. */
-  .chat-nav,
-  .admin-nav {
+  .protected-nav {
     align-items: stretch;
     flex-wrap: wrap;
   }
 
   /* Align wrapped Chat actions to the start edge. */
-  .chat-nav {
+  .protected-nav--chat {
     justify-content: flex-start;
   }
 
   /* Give each navigation action usable mobile width. */
-  .chat-nav__link,
-  .chat-nav__logout,
-  .admin-nav__link,
-  .admin-nav__logout {
+  .protected-nav__link,
+  .protected-nav__logout {
     min-width: 0;
     flex: 1 1 8rem;
   }
 
   /* Stretch logout buttons across their form. */
-  .chat-nav__logout button,
-  .admin-nav__logout button {
+  .protected-nav__logout button {
     width: 100%;
   }
 

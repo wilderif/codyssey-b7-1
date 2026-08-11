@@ -1,0 +1,14 @@
+{# Shared navigation for authenticated Chat and Admin pages. #}
+<nav
+  class="protected-nav protected-nav--{{ protected_nav.variant }}"
+  aria-label="주요 메뉴"
+>
+  {% if protected_nav.link_href %}
+  <a class="protected-nav__link" href="{{ protected_nav.link_href }}">
+    {{ protected_nav.link_label }}
+  </a>
+  {% endif %}
+  <form class="protected-nav__logout" method="post" action="/logout">
+    <button type="submit">Logout</button>
+  </form>
+</nav>

@@ -16,6 +16,7 @@ APP_ENV=local
 LOG_LEVEL=INFO
 ADMIN_USERNAME=admin
 ADMIN_INITIAL_PASSWORD=
+PORT=
 ```
 
 | 이름 | 기본값·허용값 | 용도와 관리 원칙 |
@@ -29,6 +30,7 @@ ADMIN_INITIAL_PASSWORD=
 | `LOG_LEVEL` | `INFO` | Application log level |
 | `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 기본값은 `admin`이며 앞뒤 공백 제거 후 3~30자를 허용 |
 | `ADMIN_INITIAL_PASSWORD` | 기본값 없음 | 관리자 역할 계정이 없을 때 초기 관리자 bootstrap에 사용하는 secret. 실제 값을 repository에 기록하지 않음 |
+| `PORT` | 기본값 없음 | Railway Variables에서 직접 설정하는 HTTP server port |
 
 `ADMIN_INITIAL_PASSWORD`는 관리자 역할 계정이 하나도 없을 때 Auth startup use case가 사용합니다.
 기존 관리자 처리, 누락·유효성 실패와 logging 규칙은 [Architecture](ARCHITECTURE.md)에서 정의합니다.
@@ -62,6 +64,7 @@ ADMIN_INITIAL_PASSWORD=
 - `DATABASE_URL=sqlite:////data/chatbot.db`
 - `ADMIN_USERNAME=admin`
 - `OPENAI_MODEL=gpt-5-nano`
+- `PORT`는 Railway Variables에서 사용할 port number를 직접 설정합니다.
 - `SESSION_SECRET`, `OPENAI_API_KEY`, `ADMIN_INITIAL_PASSWORD`는 Railway Variables에서 실제 값을
   제공합니다.
 - `OPENAI_TIMEOUT_SECONDS`와 `LOG_LEVEL`은 공통 기본값을 사용하거나 Railway Variables에서 유효한
@@ -93,7 +96,7 @@ Healthcheck의 HTTP response contract는 [API 계약](api/API.md#8-health-api)�
 
 ### 실제 배포 URL 기록
 
-배포 URL: 미작성 (Railway 배포 완료 후 실제 URL 입력)
+배포 URL: https://codyssey-b7-1-production.up.railway.app
 
 Production service URL은 Railway service에 연결한 public HTTPS domain입니다. 실제 URL은 deployment가
 생성하는 environment-specific 값이므로 source code나 environment 공통 기본값으로 고정하지 않습니다.
@@ -103,12 +106,18 @@ Production service URL은 Railway service에 연결한 public HTTPS domain입니
 외부 network에서 발급된 URL을 사용해 다음 smoke test를 실행합니다.
 
 ```bash
-DEPLOYMENT_URL=https://<railway-public-domain>
+DEPLOYMENT_URL=https://codyssey-b7-1-production.up.railway.app
 curl --fail --silent --show-error "$DEPLOYMENT_URL/health"
 ```
 
 정상 응답은 API Health 계약과 일치해야 합니다. 이 확인은 process 접근성을 검증하며 OpenAI 호출이나
 DB read/write 상태를 검사하지 않습니다.
+
+2026-08-11 외부 network에서 위 command를 실행해 다음 정상 응답을 확인했습니다.
+
+```json
+{"status":"ok"}
+```
 
 ### 배포 후 기능 smoke test
 

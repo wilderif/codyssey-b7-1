@@ -212,6 +212,8 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
     form = _find_tag(collector, "form", "id", "chat-form")
     label = _find_tag(collector, "label", "for", "chat-message")
     textarea = _find_tag(collector, "textarea", "id", "chat-message")
+    help_text = _find_tag(collector, "p", "id", "chat-input-help")
+    character_count = _find_tag(collector, "span", "id", "chat-character-count")
     error = _find_tag(collector, "p", "id", "chat-form-error")
     submit = _find_tag(collector, "button", "id", "chat-submit")
     pending_template = _find_tag(collector, "template", "id", "chat-pending-template")
@@ -219,13 +221,21 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
 
     assert main is not None
     assert history is not None
+    assert history["tabindex"] == "0"
     assert empty_state is not None
     assert "아직 대화 기록이 없습니다." in html
     assert "novalidate" in form
     assert label is not None
     assert textarea["maxlength"] == "1000"
-    assert textarea["aria-describedby"] == "chat-form-error"
+    assert textarea["aria-describedby"] == (
+        "chat-input-help chat-character-count chat-form-error"
+    )
     assert "required" in textarea
+    assert help_text is not None
+    assert "role" not in character_count
+    assert "aria-live" not in character_count
+    assert "Enter로 전송 · Shift+Enter로 줄바꿈" in html
+    assert "0 / 1000" in html
     assert error["role"] == "alert"
     assert "hidden" in error
     assert submit["type"] == "submit"
@@ -273,6 +283,8 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         "chat-history",
         "chat-empty-state",
         "chat-form-error",
+        "chat-input-help",
+        "chat-character-count",
         "chat-pending-template",
     ):
         assert element_id in script
@@ -289,7 +301,7 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         'Accept: "application/json"',
         '"Content-Type": "application/json"',
         'credentials: "same-origin"',
-        "JSON.stringify({ message: submittedQuestion })",
+        "body: JSON.stringify({ message:",
     ):
         assert request_contract in script
 
@@ -308,6 +320,31 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         "요청을 처리하지 못했습니다.",
     ):
         assert user_message in script
+
+    for scroll_contract in (
+        "SCROLL_BOTTOM_THRESHOLD_PX = 48",
+        "function isHistoryNearBottom",
+        "function scrollHistoryToLatest",
+        "history.scrollTop = history.scrollHeight",
+    ):
+        assert scroll_contract in script
+
+    for input_contract in (
+        "MAX_MESSAGE_LENGTH = 1000",
+        'COARSE_POINTER_QUERY = "(pointer: coarse)"',
+        "function updateInputHelp",
+        "function updateCharacterCount",
+        "function handleMessageKeydown",
+        'event.key !== "Enter"',
+        "event.shiftKey",
+        "event.isComposing",
+        "event.keyCode === 229",
+        "form.requestSubmit(submitButton)",
+        'messageInput.addEventListener("input"',
+        'messageInput.addEventListener("keydown"',
+        "characterCount.textContent =",
+    ):
+        assert input_contract in script
 
     assert ".textContent" in script
     assert "innerHTML" not in script
@@ -434,7 +471,8 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     for expected_selector in (
         ".chat-page",
         ".chat-header__inner",
-        ".chat-nav",
+        ".protected-nav",
+        ".protected-nav--chat",
         ".chat-main",
         ".chat-history",
         ".chat-exchange",
@@ -443,9 +481,16 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
         ".chat-message__content",
         ".chat-composer",
         ".chat-form",
+        ".chat-form__meta",
+        ".chat-form__help",
+        ".chat-form__counter",
     ):
         assert expected_selector in styles
     for expected_rule in (
+        "height: 100dvh",
+        "grid-template-rows: minmax(0, 1fr) auto",
+        "overflow-y: auto",
+        "overscroll-behavior-y: contain",
         "white-space: pre-wrap",
         "overflow-wrap: anywhere",
         "min-width: 0",
@@ -471,48 +516,16 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     responsive_styles = styles[styles.index("@media (max-width:") :]
     assert any(
         selector in responsive_styles
-        for selector in (".chat-header__inner", ".chat-nav", ".chat-form__actions")
+        for selector in (
+            ".chat-header__inner",
+            ".protected-nav",
+            ".chat-form__actions",
+        )
     )
     assert any(
         width_rule in responsive_styles
         for width_rule in ("width: 100%", "max-width: 100%", "min-width: 0")
     )
-
-
-def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
-    styles = STYLES_PATH.read_text(encoding="utf-8")
-
-    for expected_selector in (
-        ".admin-page",
-        ".admin-main",
-        ".admin-header",
-        ".admin-header__description",
-        ".admin-nav",
-        ".admin-nav__link",
-        ".admin-nav__logout",
-        ".admin-table-container",
-        ".admin-table-container:focus-visible",
-        ".admin-table",
-        ".admin-table caption",
-        ".admin-table th",
-        ".admin-table td",
-        ".admin-empty-state",
-    ):
-        assert expected_selector in styles
-
-    for expected_rule in (
-        "overflow-x: auto",
-        "min-width: 72rem",
-        "border-collapse: collapse",
-        "overflow-wrap: anywhere",
-        "vertical-align: top",
-        "scrollbar-gutter: stable",
-    ):
-        assert expected_rule in styles
-
-    responsive_styles = styles[styles.index("@media (max-width:") :]
-    assert ".admin-main" in responsive_styles
-    assert ".admin-table-container" in responsive_styles
 
 
 def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
@@ -525,7 +538,7 @@ def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
 
     assert body is not None
     assert main is not None
-    assert chat_link["class"] == "admin-nav__link"
+    assert chat_link["class"] == "protected-nav__link"
     assert logout_form["method"] == "post"
     assert "Chat으로 돌아가기" in html
     assert "<title>관리자 운영 기록 | Codyssey</title>" in html
@@ -533,3 +546,75 @@ def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
     assert '<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>' in html
     assert html.count("<h1") == 1
     assert 'src="/static/chat.js"' not in html
+
+
+def test_admin_template_marks_cells_by_wrapping_behavior() -> None:
+    html = _render_template(
+        "admin_logs.html",
+        items=[
+            {
+                "user_id": 1,
+                "username": "admin",
+                "chat_exchange_id": 12,
+                "created_at": datetime(2026, 8, 11, 5, 56, tzinfo=UTC),
+                "request_id": "0f45c412-0525-4a72-8c15-3d4231dfd46c",
+                "user_agent": "ExampleBrowser/1.0",
+                "response_time_ms": 3552,
+                "status": "success",
+                "error_code": None,
+            }
+        ],
+    )
+
+    assert html.count('class="admin-table__cell--compact"') == 7
+    assert html.count('class="admin-table__cell--request-id"') == 1
+    assert html.count('class="admin-table__cell--user-agent"') == 1
+
+
+def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
+    styles = STYLES_PATH.read_text(encoding="utf-8")
+
+    for expected_selector in (
+        ".admin-page",
+        ".admin-main",
+        ".admin-header",
+        ".admin-header__description",
+        ".protected-nav--admin",
+        ".protected-nav__link",
+        ".protected-nav__logout",
+        ".admin-table-container",
+        ".admin-table-container:focus-visible",
+        ".admin-table",
+        ".admin-table caption",
+        ".admin-table th",
+        ".admin-table td",
+        ".admin-table__cell--compact",
+        ".admin-table__cell--request-id",
+        ".admin-table td.admin-table__cell--user-agent",
+        ".admin-empty-state",
+    ):
+        assert expected_selector in styles
+
+    for expected_rule in (
+        "overflow-x: auto",
+        "min-width: 72rem",
+        "border-collapse: collapse",
+        "vertical-align: top",
+        "scrollbar-gutter: stable",
+        "white-space: nowrap",
+        "min-width: 16rem",
+        "min-width: 20rem",
+        "max-width: 20rem",
+    ):
+        assert expected_rule in styles
+
+    admin_cell_styles = styles[
+        styles.index(".admin-table th,") : styles.index(
+            "/* Remove the final redundant row border. */"
+        )
+    ]
+    assert admin_cell_styles.count("overflow-wrap: anywhere") == 1
+
+    responsive_styles = styles[styles.index("@media (max-width:") :]
+    assert ".admin-main" in responsive_styles
+    assert ".admin-table-container" in responsive_styles

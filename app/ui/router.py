@@ -43,7 +43,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 def get_root() -> RedirectResponse:
     """Redirect an authenticated user to the chat page."""
 
-    return RedirectResponse(url="/chat", status_code=status.HTTP_303_SEE_OTHER)
+    return _redirect_to("/chat")
 
 
 @router.get("/signup", response_class=HTMLResponse)
@@ -79,7 +79,7 @@ def post_signup(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    return _redirect_to("/login")
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -115,7 +115,7 @@ def post_login(
         )
 
     set_session_user_id(request, user_id=user.id)
-    return RedirectResponse(url="/chat", status_code=status.HTTP_303_SEE_OTHER)
+    return _redirect_to("/chat")
 
 
 @router.post("/logout")
@@ -123,7 +123,7 @@ def post_logout(request: Request) -> RedirectResponse:
     """Clear the current session and redirect to the login page."""
 
     clear_session_user_id(request)
-    return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    return _redirect_to("/login")
 
 
 @router.get("/chat", response_class=HTMLResponse)
@@ -167,3 +167,9 @@ def _render_auth_template(
         context={"error": error, "username": username},
         status_code=status_code,
     )
+
+
+def _redirect_to(path: str) -> RedirectResponse:
+    """Build the shared HTTP 303 redirect response."""
+
+    return RedirectResponse(url=path, status_code=status.HTTP_303_SEE_OTHER)

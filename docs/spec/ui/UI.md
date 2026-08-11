@@ -166,6 +166,8 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
   판별하지 않습니다.
 - 화면은 전달받은 `chat_exchanges`를 역순으로 rendering해 과거 대화를 위쪽에, 최신 대화를
   최하단에 표시합니다.
+- Chat header와 질문 form은 viewport 안에 유지하고, 대화 기록 영역만 독립적으로 세로 scroll합니다.
+  대화 기록이 있으면 최초 rendering 후 최신 대화가 보이도록 scroll합니다.
 - 각 Chat 항목은 사용자 질문을 오른쪽에, server가 반환한 AI 답변 또는 실패 안내를 왼쪽에
   배치해 발화 주체를 구분합니다.
 - 기록이 없으면 입력 form을 그대로 제공하고 `아직 대화 기록이 없습니다.`를 표시합니다.
@@ -185,14 +187,19 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
 
 - 질문 `textarea`, 전송 button, form 오류 영역을 제공합니다.
 - 질문 control에는 `required`와 `maxlength="1000"`을 적용합니다.
+- 질문 아래에는 입력 방식 helper와 `현재 글자 수 / 1000` 형식의 counter를 항상 표시하고
+  `aria-describedby`로 질문 control과 연결합니다. Counter는 매 입력을 live announcement하지 않습니다.
 - `maxlength="1000"`은 일반적인 입력 과정에서 1000자 초과 작성을 제한합니다. JavaScript의
   길이 검증은 programmatic value 변경처럼 HTML constraint를 우회한 상황을 위한 방어입니다.
 - 제출 시 JavaScript가 값을 `trim()`하고, 결과가 1~1000자가 아니면 API를 호출하지 않습니다.
 - 공백 입력에는 `질문을 입력해주세요.`, 1000자 초과 입력에는
   `질문은 1000자 이하로 입력해주세요.`를 표시합니다.
 - 유효한 질문은 공백을 제거한 전송값을 별도로 보관한 뒤 질문 control에서 즉시 제거합니다.
-  client validation에 실패한 값은 제거하지 않습니다.
-- Multiline 입력의 Enter key는 줄바꿈으로 유지하며, form 제출은 전송 button으로 수행합니다.
+  Counter도 즉시 `0 / 1000`으로 되돌립니다. Client validation에 실패한 값과 count는 유지합니다.
+- Primary pointer가 fine인 환경에서는 Enter가 form을 제출하고 Shift+Enter가 줄바꿈을 유지합니다.
+  Primary pointer가 coarse인 환경에서는 Enter가 줄바꿈을 유지하고 전송 button으로 제출합니다.
+- IME composition 중인 Enter는 제출하지 않습니다. Helper는 현재 pointer 환경에 맞춰
+  `Enter로 전송 · Shift+Enter로 줄바꿈` 또는 `Enter로 줄바꿈 · 전송 버튼으로 보내기`를 표시합니다.
 
 ### Browser 상태 전이
 
@@ -207,7 +214,7 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
   `{"message": trimmedQuestion}`입니다.
 - Submitting 중에도 질문 control은 활성 상태로 유지해 다음 질문 draft를 작성할 수 있습니다.
 - Submitting을 시작할 때 전송한 질문과 AI Loading 영역으로 구성한 pending Chat 항목을
-  최하단에 추가하고 빈 대화 기록 안내를 제거합니다.
+  최하단에 추가하고 빈 대화 기록 안내를 제거한 뒤 최신 항목으로 scroll합니다.
 - 성공하면 pending Chat 항목의 Loading을 응답 `answer`로 교체하고 `chat_exchange_id`와
   `created_at`을 해당 항목에 연결합니다. 같은 질문을 포함한 새 항목을 중복 생성하지 않으며
   별도 성공 status도 표시하지 않습니다.
@@ -220,6 +227,8 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
   있으며, 새로고침 후에는 `GET /chat`이 rendering한 실제 server history만 표시합니다.
 - 성공·실패와 관계없이 현재 작성 중인 다음 질문 draft를 비우거나 전송한 질문을 복원하지
   않습니다.
+- 응답을 교체하기 직전 대화 기록이 bottom에서 `48px` 이내라면 교체 후 최신 항목을 계속
+  표시합니다. 사용자가 그보다 위의 기록을 읽고 있으면 현재 scroll 위치를 강제로 바꾸지 않습니다.
 - Redirect를 제외한 공통 종료 경로는 Loading 상태를 정리하고 전송 button을 다시 활성화한 뒤
   질문 control에 focus를 이동합니다.
 - AI 답변 위치의 Loading 영역에는 `aria-live="polite"`, 즉시 확인해야 하는 form 오류와 실패
@@ -263,6 +272,9 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
 - Table에는 내용을 설명하는 caption과 column별 header를 제공합니다.
 - 좁은 화면에서는 table column을 숨겨 의미를 잃게 하지 않고 table container에 가로 scroll을
   제공합니다.
+- Table은 `72rem`의 적정 최소 너비를 유지하며 header와 짧은 identifier·status 값은 줄바꿈하지
+  않습니다. `request_id`는 최소 `16rem`에서 자연스러운 구분점으로만 줄바꿈하고,
+  `user_agent`는 `20rem` 너비 안에서 긴 technical token을 wrapping합니다.
 
 현재 `admin_logs.html`은 Admin route와 safe projection을 검증하기 위한 최소 template입니다. UI 작업은
 route·context ownership을 바꾸지 않고 navigation, 빈 상태, nullable `-` 표시, caption, responsive table과
@@ -296,7 +308,9 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 ### Chat 화면
 
 - [ ] 본인의 이전 대화만 과거부터 최신 순서로 표시되고 빈 기록·실패 record 안내가 동작함
+- [ ] 대화 기록이 길어도 header와 질문 form은 보이며 기록 영역만 scroll되고 최초 진입 시 최신 대화가 표시됨
 - [ ] 빈 문자열·공백·1자·1000자·1000자 초과 입력을 검증함
+- [ ] Counter가 입력과 전송 후 초기화 상태를 반영하고 Desktop Enter·Shift+Enter·IME와 Mobile Enter가 계약대로 동작함
 - [ ] 전송 직후 pending Chat 항목과 `답변 생성 중…`이 표시되고 중복 전송이 차단됨
 - [ ] 성공·실패 후 같은 pending 항목이 교체되고 작성 중인 다음 draft가 유지됨
 - [ ] 실패 항목에 임의 ID·시각이 없으며 새로고침 후 실제 server history만 표시됨
@@ -307,6 +321,7 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 ### 관리자·공통 UI
 
 - [ ] 관리자 table에 허용된 운영 metadata만 표시됨
+- [ ] 360px에서 header와 짧은 identifier가 글자 중간에서 끊기지 않고 table container만 가로 scroll됨
 - [ ] 질문·답변·내부 오류·민감정보가 관리자 DOM에 포함되지 않음
 - [ ] `/chat`에서 관리자에게만 `관리자 운영 기록` button이 표시됨
 - [ ] 보호 화면에서 Logout할 수 있고 관리자 화면에서 `/chat`으로 이동할 수 있음
