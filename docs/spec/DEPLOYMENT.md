@@ -16,6 +16,7 @@ APP_ENV=local
 LOG_LEVEL=INFO
 ADMIN_USERNAME=admin
 ADMIN_INITIAL_PASSWORD=
+PORT=
 ```
 
 | 이름 | 기본값·허용값 | 용도와 관리 원칙 |
@@ -29,6 +30,7 @@ ADMIN_INITIAL_PASSWORD=
 | `LOG_LEVEL` | `INFO` | Application log level |
 | `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 기본값은 `admin`이며 앞뒤 공백 제거 후 3~30자를 허용 |
 | `ADMIN_INITIAL_PASSWORD` | 기본값 없음 | 관리자 역할 계정이 없을 때 초기 관리자 bootstrap에 사용하는 secret. 실제 값을 repository에 기록하지 않음 |
+| `PORT` | 기본값 없음 | Railway Variables에서 직접 설정하는 HTTP server port |
 
 `ADMIN_INITIAL_PASSWORD`는 관리자 역할 계정이 하나도 없을 때 Auth startup use case가 사용합니다.
 기존 관리자 처리, 누락·유효성 실패와 logging 규칙은 [Architecture](ARCHITECTURE.md)에서 정의합니다.
@@ -62,6 +64,7 @@ ADMIN_INITIAL_PASSWORD=
 - `DATABASE_URL=sqlite:////data/chatbot.db`
 - `ADMIN_USERNAME=admin`
 - `OPENAI_MODEL=gpt-5-nano`
+- `PORT`는 Railway Variables에서 사용할 port number를 직접 설정합니다.
 - `SESSION_SECRET`, `OPENAI_API_KEY`, `ADMIN_INITIAL_PASSWORD`는 Railway Variables에서 실제 값을
   제공합니다.
 - `OPENAI_TIMEOUT_SECONDS`와 `LOG_LEVEL`은 공통 기본값을 사용하거나 Railway Variables에서 유효한
