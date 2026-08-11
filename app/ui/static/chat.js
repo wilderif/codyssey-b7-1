@@ -15,6 +15,8 @@
   // ISO 8601 shape accepted for a successful response timestamp.
   const ISO_TIMESTAMP_PATTERN =
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+  // Distance that keeps a reader anchored to the latest response update.
+  const SCROLL_BOTTOM_THRESHOLD_PX = 48;
 
   // Form that owns the Chat submission flow.
   const form = document.getElementById("chat-form");
@@ -95,6 +97,18 @@
     formError.hidden = message.length === 0;
   }
 
+  // Report whether the reader is still following the newest conversation.
+  function isHistoryNearBottom() {
+    const distanceFromBottom =
+      history.scrollHeight - history.scrollTop - history.clientHeight;
+    return distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD_PX;
+  }
+
+  // Reveal the latest exchange inside the independently scrolling history.
+  function scrollHistoryToLatest() {
+    history.scrollTop = history.scrollHeight;
+  }
+
   // Append a pending exchange and return the nodes updated after the request.
   function createPendingExchange(question) {
     // New exchange cloned from inert template markup.
@@ -109,12 +123,15 @@
     questionElement.textContent = question;
     document.getElementById("chat-empty-state")?.remove();
     history.append(exchange);
+    scrollHistoryToLatest();
 
     return { exchange, responseElement, timeElement };
   }
 
   // Replace a pending exchange with the validated server answer.
   function renderSuccess(pendingExchange, result) {
+    const keepLatestVisible = isHistoryNearBottom();
+
     pendingExchange.exchange.classList.remove("chat-exchange--pending");
     pendingExchange.exchange.setAttribute(
       "data-chat-exchange-id",
@@ -124,15 +141,25 @@
     pendingExchange.timeElement.setAttribute("datetime", result.createdAt);
     pendingExchange.timeElement.textContent = result.createdAtText;
     pendingExchange.timeElement.hidden = false;
+
+    if (keepLatestVisible) {
+      scrollHistoryToLatest();
+    }
   }
 
   // Mark a pending exchange as failed and announce its safe message.
   function renderFailure(pendingExchange, message) {
+    const keepLatestVisible = isHistoryNearBottom();
+
     pendingExchange.exchange.classList.remove("chat-exchange--pending");
     pendingExchange.exchange.classList.add("chat-exchange--failed");
     pendingExchange.responseElement.removeAttribute("aria-live");
     pendingExchange.responseElement.setAttribute("role", "alert");
     pendingExchange.responseElement.textContent = message;
+
+    if (keepLatestVisible) {
+      scrollHistoryToLatest();
+    }
   }
 
   // Re-enable input and restore focus after a completed request.
@@ -222,4 +249,5 @@
 
   // Start the Chat request flow from the form's submit event.
   form.addEventListener("submit", handleSubmit);
+  scrollHistoryToLatest();
 })();

@@ -219,6 +219,7 @@ def test_chat_template_keeps_empty_history_and_complete_form_contract() -> None:
 
     assert main is not None
     assert history is not None
+    assert history["tabindex"] == "0"
     assert empty_state is not None
     assert "아직 대화 기록이 없습니다." in html
     assert "novalidate" in form
@@ -308,6 +309,14 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
         "요청을 처리하지 못했습니다.",
     ):
         assert user_message in script
+
+    for scroll_contract in (
+        "SCROLL_BOTTOM_THRESHOLD_PX = 48",
+        "function isHistoryNearBottom",
+        "function scrollHistoryToLatest",
+        "history.scrollTop = history.scrollHeight",
+    ):
+        assert scroll_contract in script
 
     assert ".textContent" in script
     assert "innerHTML" not in script
@@ -446,6 +455,10 @@ def test_chat_styles_define_message_layout_wrapping_and_responsive_rules() -> No
     ):
         assert expected_selector in styles
     for expected_rule in (
+        "height: 100dvh",
+        "grid-template-rows: minmax(0, 1fr) auto",
+        "overflow-y: auto",
+        "overscroll-behavior-y: contain",
         "white-space: pre-wrap",
         "overflow-wrap: anywhere",
         "min-width: 0",

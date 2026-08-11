@@ -235,13 +235,17 @@ button:disabled {
 /* Fill the viewport with the Chat page layout. */
 .chat-page {
   display: flex;
+  height: 100vh;
+  height: 100dvh;
   min-width: 0;
-  min-height: 100vh;
+  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Separate the Chat header from conversation content. */
 .chat-header {
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
@@ -335,14 +339,28 @@ button:disabled {
 /* Keep Chat content readable and fill remaining height. */
 .chat-main {
   width: min(100%, 56rem);
+  min-height: 0;
   flex: 1;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  overflow: hidden;
 }
 
 /* Stack conversation records in chronological display order. */
 .chat-history {
   display: grid;
   min-width: 0;
+  min-height: 0;
+  align-content: start;
   gap: var(--space-6);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Keep the scroll-region focus indicator close to the conversation edge. */
+.chat-history:focus-visible {
+  outline-offset: var(--space-1);
 }
 
 /* Share empty-state surfaces across protected pages. */

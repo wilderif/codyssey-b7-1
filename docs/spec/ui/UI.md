@@ -166,6 +166,8 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
   판별하지 않습니다.
 - 화면은 전달받은 `chat_exchanges`를 역순으로 rendering해 과거 대화를 위쪽에, 최신 대화를
   최하단에 표시합니다.
+- Chat header와 질문 form은 viewport 안에 유지하고, 대화 기록 영역만 독립적으로 세로 scroll합니다.
+  대화 기록이 있으면 최초 rendering 후 최신 대화가 보이도록 scroll합니다.
 - 각 Chat 항목은 사용자 질문을 오른쪽에, server가 반환한 AI 답변 또는 실패 안내를 왼쪽에
   배치해 발화 주체를 구분합니다.
 - 기록이 없으면 입력 form을 그대로 제공하고 `아직 대화 기록이 없습니다.`를 표시합니다.
@@ -207,7 +209,7 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
   `{"message": trimmedQuestion}`입니다.
 - Submitting 중에도 질문 control은 활성 상태로 유지해 다음 질문 draft를 작성할 수 있습니다.
 - Submitting을 시작할 때 전송한 질문과 AI Loading 영역으로 구성한 pending Chat 항목을
-  최하단에 추가하고 빈 대화 기록 안내를 제거합니다.
+  최하단에 추가하고 빈 대화 기록 안내를 제거한 뒤 최신 항목으로 scroll합니다.
 - 성공하면 pending Chat 항목의 Loading을 응답 `answer`로 교체하고 `chat_exchange_id`와
   `created_at`을 해당 항목에 연결합니다. 같은 질문을 포함한 새 항목을 중복 생성하지 않으며
   별도 성공 status도 표시하지 않습니다.
@@ -220,6 +222,8 @@ Browser의 화면 표시만으로 접근을 허용하지 않으며, 인증과 �
   있으며, 새로고침 후에는 `GET /chat`이 rendering한 실제 server history만 표시합니다.
 - 성공·실패와 관계없이 현재 작성 중인 다음 질문 draft를 비우거나 전송한 질문을 복원하지
   않습니다.
+- 응답을 교체하기 직전 대화 기록이 bottom에서 `48px` 이내라면 교체 후 최신 항목을 계속
+  표시합니다. 사용자가 그보다 위의 기록을 읽고 있으면 현재 scroll 위치를 강제로 바꾸지 않습니다.
 - Redirect를 제외한 공통 종료 경로는 Loading 상태를 정리하고 전송 button을 다시 활성화한 뒤
   질문 control에 focus를 이동합니다.
 - AI 답변 위치의 Loading 영역에는 `aria-live="polite"`, 즉시 확인해야 하는 form 오류와 실패
@@ -296,6 +300,7 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 ### Chat 화면
 
 - [ ] 본인의 이전 대화만 과거부터 최신 순서로 표시되고 빈 기록·실패 record 안내가 동작함
+- [ ] 대화 기록이 길어도 header와 질문 form은 보이며 기록 영역만 scroll되고 최초 진입 시 최신 대화가 표시됨
 - [ ] 빈 문자열·공백·1자·1000자·1000자 초과 입력을 검증함
 - [ ] 전송 직후 pending Chat 항목과 `답변 생성 중…`이 표시되고 중복 전송이 차단됨
 - [ ] 성공·실패 후 같은 pending 항목이 교체되고 작성 중인 다음 draft가 유지됨
