@@ -50,19 +50,25 @@
         {# One fixed nine-field projection per Chat request. #}
         {% for item in items %}
         <tr>
-          <td>{{ item.user_id }}</td>
-          <td>{{ item.username if item.username is not none else "-" }}</td>
-          <td>{{ item.chat_exchange_id }}</td>
-          <td>
+          <td class="admin-table__cell--compact">{{ item.user_id }}</td>
+          <td class="admin-table__cell--compact">
+            {{ item.username if item.username is not none else "-" }}
+          </td>
+          <td class="admin-table__cell--compact">{{ item.chat_exchange_id }}</td>
+          <td class="admin-table__cell--compact">
             <time datetime="{{ item.created_at.isoformat() }}">
               {{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC
             </time>
           </td>
-          <td>{{ item.request_id }}</td>
-          <td>{{ item.user_agent if item.user_agent is not none else "-" }}</td>
-          <td>{{ item.response_time_ms }}</td>
-          <td>{{ item.status }}</td>
-          <td>{{ item.error_code if item.error_code is not none else "-" }}</td>
+          <td class="admin-table__cell--request-id">{{ item.request_id }}</td>
+          <td class="admin-table__cell--user-agent">
+            {{ item.user_agent if item.user_agent is not none else "-" }}
+          </td>
+          <td class="admin-table__cell--compact">{{ item.response_time_ms }}</td>
+          <td class="admin-table__cell--compact">{{ item.status }}</td>
+          <td class="admin-table__cell--compact">
+            {{ item.error_code if item.error_code is not none else "-" }}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

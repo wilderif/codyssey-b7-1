@@ -272,6 +272,9 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
 - Table에는 내용을 설명하는 caption과 column별 header를 제공합니다.
 - 좁은 화면에서는 table column을 숨겨 의미를 잃게 하지 않고 table container에 가로 scroll을
   제공합니다.
+- Table은 `72rem`의 적정 최소 너비를 유지하며 header와 짧은 identifier·status 값은 줄바꿈하지
+  않습니다. `request_id`는 최소 `16rem`에서 자연스러운 구분점으로만 줄바꿈하고,
+  `user_agent`는 `20rem` 너비 안에서 긴 technical token을 wrapping합니다.
 
 현재 `admin_logs.html`은 Admin route와 safe projection을 검증하기 위한 최소 template입니다. UI 작업은
 route·context ownership을 바꾸지 않고 navigation, 빈 상태, nullable `-` 표시, caption, responsive table과
@@ -318,6 +321,7 @@ interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을
 ### 관리자·공통 UI
 
 - [ ] 관리자 table에 허용된 운영 metadata만 표시됨
+- [ ] 360px에서 header와 짧은 identifier가 글자 중간에서 끊기지 않고 table container만 가로 scroll됨
 - [ ] 질문·답변·내부 오류·민감정보가 관리자 DOM에 포함되지 않음
 - [ ] `/chat`에서 관리자에게만 `관리자 운영 기록` button이 표시됨
 - [ ] 보호 화면에서 Logout할 수 있고 관리자 화면에서 `/chat`으로 이동할 수 있음

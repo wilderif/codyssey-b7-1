@@ -539,6 +539,9 @@ def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
         ".admin-table caption",
         ".admin-table th",
         ".admin-table td",
+        ".admin-table__cell--compact",
+        ".admin-table__cell--request-id",
+        ".admin-table td.admin-table__cell--user-agent",
         ".admin-empty-state",
     ):
         assert expected_selector in styles
@@ -547,11 +550,21 @@ def test_admin_styles_keep_all_columns_in_a_scrollable_readable_table() -> None:
         "overflow-x: auto",
         "min-width: 72rem",
         "border-collapse: collapse",
-        "overflow-wrap: anywhere",
         "vertical-align: top",
         "scrollbar-gutter: stable",
+        "white-space: nowrap",
+        "min-width: 16rem",
+        "min-width: 20rem",
+        "max-width: 20rem",
     ):
         assert expected_rule in styles
+
+    admin_cell_styles = styles[
+        styles.index(".admin-table th,") : styles.index(
+            "/* Remove the final redundant row border. */"
+        )
+    ]
+    assert admin_cell_styles.count("overflow-wrap: anywhere") == 1
 
     responsive_styles = styles[styles.index("@media (max-width:") :]
     assert ".admin-main" in responsive_styles
@@ -576,3 +589,26 @@ def test_admin_template_uses_shared_layout_and_protected_navigation() -> None:
     assert '<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>' in html
     assert html.count("<h1") == 1
     assert 'src="/static/chat.js"' not in html
+
+
+def test_admin_template_marks_cells_by_wrapping_behavior() -> None:
+    html = _render_template(
+        "admin_logs.html",
+        items=[
+            {
+                "user_id": 1,
+                "username": "admin",
+                "chat_exchange_id": 12,
+                "created_at": datetime(2026, 8, 11, 5, 56, tzinfo=UTC),
+                "request_id": "0f45c412-0525-4a72-8c15-3d4231dfd46c",
+                "user_agent": "ExampleBrowser/1.0",
+                "response_time_ms": 3552,
+                "status": "success",
+                "error_code": None,
+            }
+        ],
+    )
+
+    assert html.count('class="admin-table__cell--compact"') == 7
+    assert html.count('class="admin-table__cell--request-id"') == 1
+    assert html.count('class="admin-table__cell--user-agent"') == 1

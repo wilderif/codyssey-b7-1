@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Generator
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -249,7 +250,7 @@ def test_admin_logs_renders_nullable_metadata_with_placeholder(
     response = client.get("/admin/logs")
 
     assert response.status_code == 200
-    assert response.text.count("<td>-</td>") == 3
+    assert len(re.findall(r"<td\b[^>]*>\s*-\s*</td>", response.text)) == 3
 
 
 def test_admin_logs_renders_empty_state_without_table(
