@@ -2,7 +2,8 @@
 
 이 문서는 화면 구조, form layout, Browser 상태, interaction, 접근성과 responsive 동작을 정의합니다.
 HTTP status·request·response·오류 `code`는 [API 계약](../api/API.md), module 의존 방향은
-[Architecture](../ARCHITECTURE.md)를 따릅니다. 이 문서는 구현 완료 상태를 의미하지 않습니다.
+[Architecture](../ARCHITECTURE.md)를 따릅니다. 이 문서는 UI 계약을 정의하며 현재 구현 구성은
+[구현 상태와 책임](#8-구현-상태와-책임)에 기록합니다.
 
 ## 1. 범위와 기술 경계
 
@@ -286,27 +287,29 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
   않습니다. `request_id`는 최소 `16rem`에서 자연스러운 구분점으로만 줄바꿈하고,
   `user_agent`는 `20rem` 너비 안에서 긴 technical token을 wrapping합니다.
 
-현재 `admin_logs.html`은 Admin route와 safe projection을 검증하기 위한 최소 template입니다. UI 작업은
-route·context ownership을 바꾸지 않고 navigation, 빈 상태, nullable `-` 표시, caption, responsive table과
-공통 style을 이 section의 최종 계약에 맞게 보완합니다.
+현재 `admin_logs.html`은 Admin route와 safe projection을 유지하면서 navigation, 빈 상태, nullable `-`
+표시, caption, responsive table과 공통 style을 제공합니다. Route·context ownership은 변경하지 않습니다.
 
-## 8. 구현 handoff
+## 8. 구현 상태와 책임
 
-UI/FE 담당 범위는 다음과 같습니다.
+현재 UI/FE 구현은 다음 구성을 따릅니다.
 
-1. `app/ui/router.py`에 `/`, Auth form route, `/logout`, `/chat`을 구현합니다.
-2. `signup.html`, `login.html`, `chat.html`, `styles.css`, `chat.js`를 추가하고 기존
-   `admin_logs.html`을 이 문서에 맞게 보완합니다.
-3. `app/main.py`에 UI router와 `/static` mount를 연결합니다. `app/main.py` 소유자와 공용 file 변경을
-   합의하고 Admin·Chat route를 중복 등록하지 않습니다.
-4. HTML route test, template의 민감정보 미노출 test, Chat Browser 상태를 검증하는 JavaScript 또는
-   수동 test를 추가합니다.
+1. `app/ui/router.py`가 `/`, Auth form route, `/logout`, `/chat`을 소유합니다.
+2. `signup.html`, `login.html`, `chat.html`, `admin_logs.html`과 공통 template이 화면을 rendering하고,
+   `styles.css`, `chat.js`, `page-lifecycle.js`가 공통 style과 Browser interaction을 담당합니다.
+3. `app/main.py`가 UI router를 한 번 등록하고 `app/ui/static`을 `/static`에 mount합니다. Admin·Chat
+   route는 각 소유 Router에서만 등록합니다.
+4. `tests/ui/test_router.py`와 `tests/ui/test_templates.py`가 HTML route, 민감정보 미노출, template과
+   static asset 연결을 검증합니다. 실제 Browser interaction은 아래 수동 checklist로 반복 확인합니다.
 
-착수 전 integration prerequisite는 Auth module의 `require_authenticated_user()`와
-`AuthenticatedUser(user_id, is_admin)`입니다. Chat history·JSON API와 Admin route는 기존 public
-interface를 그대로 사용하며 UI 작업에서 schema나 route ownership을 변경하지 않습니다.
+UI는 Auth module의 `require_authenticated_user()`와 `AuthenticatedUser(user_id, is_admin)`을
+사용합니다. Chat history·JSON API와 Admin route의 public interface를 유지하며 schema나 route
+ownership을 변경하지 않습니다.
 
 ## 9. 수동 검증 checklist
+
+아래 항목은 구현 미완료 목록이 아니라 deployment와 UI regression 확인 시 반복 수행하는 수동
+checklist입니다. 실행 결과는 이 계약 문서의 checkbox 상태로 지속 관리하지 않습니다.
 
 ### 인증 화면
 
