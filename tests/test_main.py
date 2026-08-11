@@ -39,6 +39,7 @@ def _settings(
     }
     if app_env == "production":
         values.update(
+            DATABASE_URL="sqlite:////data/chatbot.db",
             OPENAI_API_KEY="test-openai-key",
             OPENAI_MODEL="test-openai-model",
         )
@@ -65,7 +66,7 @@ def main_module(monkeypatch: pytest.MonkeyPatch) -> Generator[ModuleType, None, 
     monkeypatch.setattr(config_module, "settings", _settings())
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
-    monkeypatch.setattr(module, "init_db", lambda: None)
+    monkeypatch.setattr(module, "init_db", lambda **_kwargs: None)
     monkeypatch.setattr(module, "SessionLocal", lambda: nullcontext(object()))
     monkeypatch.setattr(module, "ensure_initial_admin", lambda **_kwargs: None)
     try:
@@ -124,6 +125,32 @@ def test_create_app_mounts_static_files_once(main_module: ModuleType) -> None:
     assert matching_routes[0].name == "static"
 
 
+@pytest.mark.parametrize(
+    ("app_env", "expected_create_directory"),
+    [("local", True), ("production", False)],
+)
+def test_lifespan_creates_sqlite_directory_only_outside_production(
+    main_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    app_env: str,
+    expected_create_directory: bool,
+) -> None:
+    initialized_with: list[bool] = []
+
+    def record_init_db(*, create_sqlite_directory: bool = True) -> None:
+        initialized_with.append(create_sqlite_directory)
+
+    monkeypatch.setattr(main_module, "init_db", record_init_db)
+    monkeypatch.setattr(main_module, "SessionLocal", lambda: nullcontext(object()))
+    monkeypatch.setattr(main_module, "ensure_initial_admin", lambda **_kwargs: None)
+    application = main_module.create_app(_settings(app_env=app_env))
+
+    with TestClient(application) as client:
+        assert client.get("/health").status_code == 200
+
+    assert initialized_with == [expected_create_directory]
+
+
 def test_health_initializes_registered_models_before_serving_requests(
     main_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -133,7 +160,7 @@ def test_health_initializes_registered_models_before_serving_requests(
     db_session = object()
     configured = _settings()
 
-    def record_init_db() -> None:
+    def record_init_db(**_kwargs: object) -> None:
         startup_events.append("init_db")
         initialized_tables.append(set(Base.metadata.tables))
 
@@ -179,7 +206,7 @@ def test_admin_bootstrap_failure_closes_session_and_stops_startup(
     db_session = object()
     configured = _settings()
 
-    def record_init_db() -> None:
+    def record_init_db(**_kwargs: object) -> None:
         startup_events.append("init_db")
 
     @contextmanager

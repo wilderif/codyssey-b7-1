@@ -41,7 +41,7 @@ def _create_lifespan(
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         """요청을 받기 전에 DB table과 초기 admin 계정을 준비한다."""
 
-        init_db()
+        init_db(create_sqlite_directory=app_settings.app_env != "production")
         with SessionLocal() as db:
             ensure_initial_admin(db=db, app_settings=app_settings)
         yield

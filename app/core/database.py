@@ -68,15 +68,28 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db() -> None:
+def init_db(*, create_sqlite_directory: bool = True) -> None:
     """등록된 model의 table을 생성한다."""
 
-    _ensure_sqlite_directory(_database_url)
+    _ensure_sqlite_directory(
+        _database_url,
+        create_directory=create_sqlite_directory,
+    )
     Base.metadata.create_all(bind=engine)
 
 
-def _ensure_sqlite_directory(url: URL) -> None:
+def _ensure_sqlite_directory(url: URL, *, create_directory: bool) -> None:
     if url.get_backend_name() != "sqlite" or url.database in (None, "", ":memory:"):
         return
 
-    Path(url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    parent_directory = Path(url.database).expanduser().parent
+    if parent_directory.is_dir():
+        return
+
+    if create_directory:
+        parent_directory.mkdir(parents=True, exist_ok=True)
+        return
+
+    raise RuntimeError(
+        f"SQLite DATABASE_URL parent directory가 없습니다: {parent_directory}"
+    )

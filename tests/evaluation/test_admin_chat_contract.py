@@ -54,7 +54,7 @@ def app(
 ) -> Generator[FastAPI, None, None]:
     """create_app의 실제 middleware/router/lifespan을 test DB에 연결한다."""
 
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    monkeypatch.setattr(main_module, "init_db", lambda **_kwargs: None)
 
     monkeypatch.setattr(main_module, "SessionLocal", lambda: nullcontext(object()))
     monkeypatch.setattr(main_module, "ensure_initial_admin", lambda **_kwargs: None)

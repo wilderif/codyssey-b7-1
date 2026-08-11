@@ -25,7 +25,7 @@ PORT=
 | `OPENAI_API_KEY` | 기본값 없음 | Server의 OpenAI API 인증 secret. Browser에 노출하거나 repository에 실제 값을 기록하지 않음 |
 | `OPENAI_MODEL` | 설정값: `gpt-5-nano` | Chat answer 생성에 사용할 OpenAI model. 현재 비용 우선 선택값 |
 | `OPENAI_TIMEOUT_SECONDS` | `30` | OpenAI request timeout. 0보다 큰 숫자만 허용 |
-| `DATABASE_URL` | Local 기본값: `sqlite:///./data/chatbot.db`; production에서는 필수 | Local SQLite 연결 URL. production에서는 명시적으로 설정하지 않으면 application 시작을 거부해 ephemeral file로의 fallback을 막음 |
+| `DATABASE_URL` | Local 기본값: `sqlite:///./data/chatbot.db`; production에서는 필수 | Local SQLite 연결 URL. production에서는 명시적으로 설정하지 않으면 application 시작을 거부한다. SQLite URL의 parent directory도 시작 전에 존재해야 하며 application이 새로 만들지 않아 Volume 누락에 따른 ephemeral file 생성을 막는다 |
 | `APP_ENV` | `local`; `production` 허용 | 실행 environment를 구분. `production`에서는 production 보안·설정 validation을 적용 |
 | `LOG_LEVEL` | `INFO` | Application log level |
 | `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 기본값은 `admin`이며 앞뒤 공백 제거 후 3~30자를 허용 |
@@ -74,6 +74,7 @@ PORT=
 
 - Railway Volume mount path는 `/data`입니다.
 - SQLite file은 `/data/chatbot.db`를 사용합니다.
+- Production application은 `/data` directory를 생성하지 않습니다. Volume이 연결되지 않아 `/data`가 없으면 startup이 실패해야 합니다.
 - Service restart와 새 deployment 후에도 기존 SQLite data가 유지되어야 합니다.
 
 ### Start와 healthcheck
