@@ -1,9 +1,5 @@
 """Chat domain이 HTTP layer에 전달하는 안전한 오류다."""
 
-from __future__ import annotations
-
-from enum import StrEnum
-
 
 class AppError(Exception):
     """JSON API가 안전하게 응답할 수 있는 application 오류다."""
@@ -19,21 +15,6 @@ class AppError(Exception):
 
 class ChatError(Exception):
     """사용자 응답으로 변환 가능한 Chat domain 오류의 base class다."""
-
-
-class ChatValidationReason(StrEnum):
-    """질문이 위반한 Chat domain validation 규칙이다."""
-
-    EMPTY_MESSAGE = "empty_message"
-    MESSAGE_TOO_LONG = "message_too_long"
-
-
-class ChatValidationError(ChatError):
-    """질문이 Chat domain 규칙을 만족하지 않는다."""
-
-    def __init__(self, reason: ChatValidationReason) -> None:
-        self.reason = reason
-        super().__init__(reason.value)
 
 
 class ChatGenerationError(ChatError):

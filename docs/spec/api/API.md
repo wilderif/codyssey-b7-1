@@ -108,7 +108,7 @@
 
 | Method | 경로 | 인증 | 역할 |
 | --- | --- | --- | --- |
-| `POST` | `/api/chat` | 필수 | 질문 검증, 문맥 구성, OpenAI 호출, 대화 저장 |
+| `POST` | `/api/chat` | 필수 | Pydantic 질문 검증, 문맥 구성, OpenAI 호출, 대화 저장 |
 | `GET` | `/api/chat-exchanges` | 필수 | 로그인 사용자의 전체 질문·답변을 JSON으로 반환 |
 | `GET` | `/api/chat-exchanges/{chat_exchange_id}` | 필수 | 로그인 사용자의 특정 질문·답변 한 건을 JSON으로 반환 |
 | `GET` | `/health` | 불필요 | process 상태만 확인 |

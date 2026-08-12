@@ -15,8 +15,6 @@ from app.chat.context import ChatMessage, build_context_messages
 from app.chat.errors import (
     ChatGenerationError,
     ChatPersistenceError,
-    ChatValidationError,
-    ChatValidationReason,
 )
 from app.chat.models import ChatExchange
 from app.chat.openai_client import (
@@ -30,7 +28,6 @@ from app.chat.repository import (
 )
 
 CONTEXT_HISTORY_LIMIT = 5
-MAX_MESSAGE_LENGTH = 1000
 
 logger = logging.getLogger(__name__)
 
@@ -78,21 +75,17 @@ class ChatService:
         self._repository = repository
         self._answer_generator = answer_generator
 
-    async def process_chat(
+    async def execute(
         self,
         *,
         user_id: int,
         message: str,
         request_id: str,
         user_agent: str | None,
-        request_already_logged: bool = False,
+        started_at: float,
     ) -> ChatResult:
         """질문을 처리하고 성공·실패 ChatExchange transaction을 완료한다."""
 
-        started_at = time.perf_counter()
-        if not request_already_logged:
-            logger.info("request_received request_id=%s", request_id)
-        question = _normalize_message(message)
         try:
             exchanges = self._repository.get_recent_success_exchanges(
                 user_id=user_id,
@@ -100,7 +93,7 @@ class ChatService:
             )
             messages = build_context_messages(
                 exchanges=exchanges,
-                current_question=question,
+                current_question=message,
             )
             self._db.rollback()
         except Exception as error:
@@ -117,7 +110,7 @@ class ChatService:
             )
             self._save_failed_exchange(
                 user_id=user_id,
-                question=question,
+                question=message,
                 error_message=error.record_message,
                 request_id=request_id,
                 user_agent=user_agent,
@@ -131,7 +124,7 @@ class ChatService:
             )
             self._save_failed_exchange(
                 user_id=user_id,
-                question=question,
+                question=message,
                 error_message="internal_error",
                 request_id=request_id,
                 user_agent=user_agent,
@@ -143,7 +136,7 @@ class ChatService:
         try:
             exchange = self._repository.create_success_exchange(
                 user_id=user_id,
-                question=question,
+                question=message,
                 answer=answer,
                 request_id=request_id,
                 user_agent=user_agent,
@@ -202,8 +195,8 @@ async def process_chat(
 ) -> ChatResult:
     """production 의존성을 조립해 Chat use case를 실행한다."""
 
+    started_at = time.perf_counter()
     logger.info("request_received request_id=%s", request_id)
-    normalized_message = _normalize_message(message)
     repository = SqlAlchemyChatExchangeRepository(db=db)
     async with create_openai_client() as client:
         service = ChatService(
@@ -214,12 +207,12 @@ async def process_chat(
                 model=get_openai_model(),
             ),
         )
-        return await service.process_chat(
+        return await service.execute(
             user_id=user_id,
-            message=normalized_message,
+            message=message,
             request_id=request_id,
             user_agent=user_agent,
-            request_already_logged=True,
+            started_at=started_at,
         )
 
 
@@ -255,15 +248,6 @@ def get_chat_exchange(
         db.rollback()
         raise ChatPersistenceError(is_write=False) from error
     return _to_history_item(exchange) if exchange is not None else None
-
-
-def _normalize_message(message: str) -> str:
-    normalized = message.strip()
-    if not normalized:
-        raise ChatValidationError(ChatValidationReason.EMPTY_MESSAGE)
-    if len(normalized) > MAX_MESSAGE_LENGTH:
-        raise ChatValidationError(ChatValidationReason.MESSAGE_TOO_LONG)
-    return normalized
 
 
 def _elapsed_time_ms(started_at: float) -> int:

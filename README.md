@@ -138,8 +138,8 @@ flowchart LR
 | `app/auth/service.py` | 회원가입, login 인증, 초기 관리자 bootstrap과 transaction 처리 |
 | `app/auth/dependencies.py` | Session user ID helper, JSON API 로그인 검사, 관리자 권한 검사 |
 | `app/chat/router.py` | Chat·본인 기록 JSON endpoint와 공통 JSON 오류 응답 |
-| `app/chat/schemas.py` | Chat request·response와 오류 Pydantic schema |
-| `app/chat/service.py` | 입력 검증, 사용자 문맥 조회, OpenAI 호출, 성공·실패 기록 transaction |
+| `app/chat/schemas.py` | Chat request·response와 오류 Pydantic schema, 질문 입력 정규화·검증 |
+| `app/chat/service.py` | 사용자 문맥 조회, OpenAI 호출, 성공·실패 기록 transaction |
 | `app/chat/context.py` | System prompt와 최근 성공 대화를 OpenAI message로 구성 |
 | `app/chat/openai_client.py` | OpenAI SDK adapter, model·timeout 적용, API 오류 변환 |
 | `app/chat/models.py` | `chat_exchanges` ORM model과 DB constraint |

@@ -21,8 +21,6 @@ from app.chat.errors import (
     ChatGenerationError,
     ChatPersistenceError,
     ChatTimeoutError,
-    ChatValidationError,
-    ChatValidationReason,
 )
 from app.chat.i18n import get_message
 from app.chat.schemas import (
@@ -66,8 +64,6 @@ async def post_chat(
             user_agent=_normalize_user_agent(request.headers.get("user-agent")),
             db=db,
         )
-    except ChatValidationError as error:
-        raise _validation_app_error(error) from error
     except ChatTimeoutError as error:
         raise AppError(status_code=504, code="openai_timeout") from error
     except ChatGenerationError as error:
@@ -189,14 +185,6 @@ async def unhandled_exception_handler(request: Request, _error: Exception) -> Re
     )
     response.headers[REQUEST_ID_HEADER] = get_request_id(request)
     return response
-
-
-def _validation_app_error(error: ChatValidationError) -> AppError:
-    detail_key = {
-        ChatValidationReason.EMPTY_MESSAGE: "empty_message",
-        ChatValidationReason.MESSAGE_TOO_LONG: "message_too_long",
-    }[error.reason]
-    return AppError(status_code=400, code="validation_error", detail_key=detail_key)
 
 
 def _semantic_validation_detail_key(error: Exception) -> str | None:

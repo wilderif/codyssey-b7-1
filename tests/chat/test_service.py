@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Self
@@ -20,7 +21,6 @@ from app.chat.errors import (
     ChatInvalidResponseError,
     ChatPersistenceError,
     ChatTimeoutError,
-    ChatValidationError,
 )
 from app.chat.models import ChatExchange
 from app.chat.repository import SqlAlchemyChatExchangeRepository
@@ -156,34 +156,6 @@ def _assert_read_failure(call: Callable[[], object]) -> None:
     assert captured.value.is_write is False
 
 
-@pytest.mark.parametrize(
-    ("message", "expected_reason"),
-    [
-        ("   ", "empty_message"),
-        ("x" * 1001, "message_too_long"),
-    ],
-)
-def test_validation_error_identifies_the_invalid_rule(
-    db: Session,
-    user_id: int,
-    message: str,
-    expected_reason: str,
-) -> None:
-    service = _create_service(db, RecordingGenerator())
-
-    with pytest.raises(ChatValidationError) as captured:
-        asyncio.run(
-            service.process_chat(
-                user_id=user_id,
-                message=message,
-                request_id="validation-request",
-                user_agent=None,
-            )
-        )
-
-    assert captured.value.reason == expected_reason
-
-
 def test_context_read_transaction_ends_before_answer_generation(
     db: Session,
     user_id: int,
@@ -191,11 +163,12 @@ def test_context_read_transaction_ends_before_answer_generation(
     service = _create_service(db, TransactionCheckingGenerator(db))
 
     result = asyncio.run(
-        service.process_chat(
+        service.execute(
             user_id=user_id,
             message="question",
             request_id="transaction-request",
             user_agent=None,
+            started_at=time.perf_counter(),
         )
     )
 
@@ -214,17 +187,18 @@ def test_context_read_failure_is_classified_as_non_write_error(
 
     _assert_read_failure(
         lambda: asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
                 message="question",
                 request_id="failing-context-read",
                 user_agent=None,
+                started_at=time.perf_counter(),
             )
         )
     )
 
 
-def test_success_uses_recent_success_context_and_persists_trimmed_question(
+def test_service_preserves_message_normalized_by_http_boundary(
     db: Session,
     user_id: int,
     caplog: pytest.LogCaptureFixture,
@@ -279,16 +253,17 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
     db.commit()
     generator = RecordingGenerator(answer="generated answer")
     service = _create_service(db, generator)
-    question = "SELECT stack api-key Cookie internal error_message"
+    question = "  SELECT stack api-key Cookie internal error_message  "
     request_id = "success-request"
 
     with caplog.at_level("INFO", logger="app.chat.service"):
         result = asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
-                message=f"  {question}  ",
+                message=question,
                 request_id=request_id,
                 user_agent="Cookie secret",
+                started_at=time.perf_counter(),
             )
         )
 
@@ -335,7 +310,6 @@ def test_success_uses_recent_success_context_and_persists_trimmed_question(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "request_received",
             "ai_call_started",
             "ai_call_succeeded",
             "db_save_succeeded",
@@ -366,11 +340,12 @@ def test_generation_error_persists_safe_failure_and_propagates(
         pytest.raises(type(error)),
     ):
         asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
                 message="question",
                 request_id=request_id,
                 user_agent=None,
+                started_at=time.perf_counter(),
             )
         )
 
@@ -386,7 +361,6 @@ def test_generation_error_persists_safe_failure_and_propagates(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "request_received",
             "ai_call_started",
             "ai_call_failed",
             "db_save_succeeded",
@@ -406,11 +380,12 @@ def test_unexpected_generator_error_persists_internal_failure_and_propagates(
         pytest.raises(RuntimeError, match="unexpected generator failure"),
     ):
         asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
                 message="question",
                 request_id="unexpected-error-request",
                 user_agent="test-agent/1.0",
+                started_at=time.perf_counter(),
             )
         )
 
@@ -451,11 +426,12 @@ def test_success_commit_failure_rolls_back_and_raises_persistence_error(
 
     with pytest.raises(ChatPersistenceError):
         asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
                 message="question",
                 request_id="success-commit-failure",
                 user_agent=None,
+                started_at=time.perf_counter(),
             )
         )
 
@@ -480,11 +456,12 @@ def test_save_failure_does_not_persist_failure_record_and_logs_safely(
         pytest.raises(ChatPersistenceError),
     ):
         asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
                 message="question",
                 request_id=request_id,
                 user_agent=None,
+                started_at=time.perf_counter(),
             )
         )
 
@@ -497,7 +474,6 @@ def test_save_failure_does_not_persist_failure_record_and_logs_safely(
         _service_log_messages(caplog),
         request_id=request_id,
         expected_events={
-            "request_received",
             "ai_call_started",
             "ai_call_succeeded",
             "db_save_failed",
@@ -519,46 +495,16 @@ def test_failed_record_commit_failure_takes_priority_over_generation_error(
 
     with pytest.raises(ChatPersistenceError):
         asyncio.run(
-            service.process_chat(
+            service.execute(
                 user_id=user_id,
                 message="question",
                 request_id="failed-commit-failure",
                 user_agent=None,
+                started_at=time.perf_counter(),
             )
         )
 
     assert not db.in_transaction()
-
-
-def test_production_wrapper_validates_and_logs_before_creating_openai_client(
-    monkeypatch: pytest.MonkeyPatch,
-    db: Session,
-    user_id: int,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    def fail_if_called() -> None:
-        raise AssertionError("OpenAI client must not be created for invalid input")
-
-    monkeypatch.setattr(service_module, "create_openai_client", fail_if_called)
-
-    with (
-        caplog.at_level("INFO", logger="app.chat.service"),
-        pytest.raises(ChatValidationError) as captured,
-    ):
-        asyncio.run(
-            service_module.process_chat(
-                user_id=user_id,
-                message=" ",
-                request_id="production-validation-request",
-                user_agent="Cookie secret",
-                db=db,
-            )
-        )
-
-    assert captured.value.reason == "empty_message"
-    assert _service_log_messages(caplog) == [
-        "request_received request_id=production-validation-request"
-    ]
 
 
 def test_production_wrapper_logs_safely_before_client_configuration_failure(
@@ -592,23 +538,35 @@ def test_production_wrapper_logs_safely_before_client_configuration_failure(
     )
 
 
-def test_production_wrapper_composes_client_generator_and_real_persistence(
+def test_production_wrapper_does_not_revalidate_message_before_persistence(
     db: Session,
     user_id: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = FakeAsyncOpenAIClient()
     received: dict[str, object] = {}
+    current_time = 10.0
+
+    def fake_perf_counter() -> float:
+        return current_time
+
+    def create_client() -> FakeAsyncOpenAIClient:
+        nonlocal current_time
+        current_time = 10.2
+        return client
 
     class FakeProductionGenerator:
         def __init__(self, *, client: object, model: str) -> None:
             received.update({"client": client, "model": model})
 
         async def generate(self, *, messages: Sequence[ChatMessage]) -> str:
+            nonlocal current_time
+            current_time = 10.5
             received["messages"] = list(messages)
             return "production wrapper answer"
 
-    monkeypatch.setattr(service_module, "create_openai_client", lambda: client)
+    monkeypatch.setattr(service_module.time, "perf_counter", fake_perf_counter)
+    monkeypatch.setattr(service_module, "create_openai_client", create_client)
     monkeypatch.setattr(service_module, "get_openai_model", lambda: "configured-model")
     monkeypatch.setattr(
         service_module, "OpenAIAnswerGenerator", FakeProductionGenerator
@@ -630,14 +588,21 @@ def test_production_wrapper_composes_client_generator_and_real_persistence(
     assert received["model"] == "configured-model"
     assert received["messages"] == [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": "wrapper question"},
+        {"role": "user", "content": "  wrapper question  "},
     ]
     assert saved is not None
-    assert (saved.question, saved.answer, saved.request_id, saved.user_agent) == (
-        "wrapper question",
+    assert (
+        saved.question,
+        saved.answer,
+        saved.request_id,
+        saved.user_agent,
+        saved.response_time_ms,
+    ) == (
+        "  wrapper question  ",
         "production wrapper answer",
         "wrapper-success-request",
         "wrapper-agent",
+        500,
     )
 
 
