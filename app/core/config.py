@@ -17,21 +17,19 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     database_url: str = Field(
         default="sqlite:///./data/chatbot.db",
         validation_alias="DATABASE_URL",
     )
-    session_secret: SecretStr | None = Field(
-        default=None,
-        validation_alias="SESSION_SECRET",
-    )
+    session_secret: SecretStr = Field(validation_alias="SESSION_SECRET")
     openai_api_key: SecretStr | None = Field(
         default=None,
         validation_alias="OPENAI_API_KEY",
     )
-    openai_model: str | None = Field(
+    openai_model: str = Field(
         default="gpt-5-nano",
         validation_alias="OPENAI_MODEL",
     )
@@ -76,6 +74,39 @@ class Settings(BaseSettings):
     def normalize_admin_username(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
+    # OpenAI model은 설정값 자체를 normalize하고 빈 값은 받지 않는다.
+    @field_validator("openai_model")
+    @classmethod
+    def validate_openai_model(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("OPENAI_MODEL은 비어 있을 수 없습니다.")
+        return normalized
+
+    # DATABASE_URL은 명시된 경우 공백 값일 수 없다.
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("DATABASE_URL은 비어 있을 수 없습니다.")
+        return value
+
+    # SESSION_SECRET은 모든 environment에서 실제 application 실행에 필요하다.
+    @field_validator("session_secret")
+    @classmethod
+    def validate_session_secret(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("SESSION_SECRET은 비어 있을 수 없습니다.")
+        return value
+
+    # Optional secret은 누락을 허용하되 제공된 공백 값은 받지 않는다.
+    @field_validator("openai_api_key", "admin_initial_password")
+    @classmethod
+    def validate_optional_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().strip():
+            raise ValueError("제공된 secret은 비어 있을 수 없습니다.")
+        return value
+
     # timeout은 0 이하로 못 넣게 막는다.
     @field_validator("openai_timeout_seconds")
     @classmethod
@@ -90,34 +121,21 @@ class Settings(BaseSettings):
         if self.app_env != "production":
             return self
 
-        required = {
-            "DATABASE_URL": (
-                self.database_url if "database_url" in self.model_fields_set else None
-            ),
-            "SESSION_SECRET": self.session_secret,
-            "OPENAI_API_KEY": self.openai_api_key,
-            "OPENAI_MODEL": self.openai_model,
-        }
-        missing = [name for name, value in required.items() if _is_blank(value)]
+        missing: list[str] = []
+        if "database_url" not in self.model_fields_set:
+            missing.append("DATABASE_URL")
+        if self.openai_api_key is None:
+            missing.append("OPENAI_API_KEY")
         if missing:
             raise ValueError(
                 "Production 환경에 필요한 설정이 없습니다: " + ", ".join(missing)
             )
-        if self.session_secret is not None:
-            session_secret = self.session_secret.get_secret_value().strip()
-            if session_secret == PUBLIC_SESSION_SECRET_PLACEHOLDER:
-                raise ValueError(
-                    "Production 환경에서는 공개된 SESSION_SECRET placeholder를 사용할 수 없습니다."
-                )
+        session_secret = self.session_secret.get_secret_value().strip()
+        if session_secret == PUBLIC_SESSION_SECRET_PLACEHOLDER:
+            raise ValueError(
+                "Production 환경에서는 공개된 SESSION_SECRET placeholder를 사용할 수 없습니다."
+            )
         return self
 
 
-def _is_blank(value: SecretStr | str | None) -> bool:
-    if value is None:
-        return True
-    if isinstance(value, SecretStr):
-        return not value.get_secret_value().strip()
-    return not value.strip()
-
-
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,11 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+
+# Application module import 전에 test용 필수·제공된 secret을 제공한다.
+os.environ.setdefault("SESSION_SECRET", "test-session-secret-for-collection")
+os.environ.setdefault("OPENAI_API_KEY", "test-openai-api-key-for-collection")
+os.environ.setdefault("ADMIN_INITIAL_PASSWORD", "test-admin-password-for-collection")
 
 from app.auth.models import User
 from app.chat.models import ChatExchange  # noqa: F401

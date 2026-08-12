@@ -25,9 +25,14 @@ pytestmark = pytest.mark.usefixtures("isolated_env_file_directory")
 def _admin_settings(
     *, username: str = "admin", password: str | None = None
 ) -> Settings:
-    values: dict[str, object] = {"ADMIN_USERNAME": username}
+    values: dict[str, object] = {
+        "ADMIN_USERNAME": username,
+        "SESSION_SECRET": "test-session-secret",
+    }
     if password is not None:
         values["ADMIN_INITIAL_PASSWORD"] = password
+    else:
+        values["ADMIN_INITIAL_PASSWORD"] = None
     return Settings.model_validate(values)
 
 
@@ -141,7 +146,7 @@ def test_ensure_initial_admin_rejects_missing_password(
     )
 
 
-@pytest.mark.parametrize("password", ["", "short", "x" * 73])
+@pytest.mark.parametrize("password", ["short", "x" * 73])
 def test_ensure_initial_admin_rejects_invalid_password_length(
     db: Session,
     caplog: pytest.LogCaptureFixture,
@@ -159,6 +164,29 @@ def test_ensure_initial_admin_rejects_invalid_password_length(
     if password:
         assert password not in str(captured.value)
         assert password not in caplog.text
+    assert not db.in_transaction()
+    _assert_safe_failure_log(
+        caplog,
+        reason=AdminBootstrapReason.INVALID_INITIAL_PASSWORD,
+    )
+
+
+def test_ensure_initial_admin_rejects_a_seven_character_password_after_config(
+    db: Session,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    password = "seven77"
+    app_settings = _admin_settings(password=password)
+
+    with (
+        caplog.at_level(logging.ERROR, logger=service_module.__name__),
+        pytest.raises(AdminBootstrapError) as captured,
+    ):
+        ensure_initial_admin(db=db, app_settings=app_settings)
+
+    assert captured.value.reason == AdminBootstrapReason.INVALID_INITIAL_PASSWORD
+    assert password not in str(captured.value)
+    assert password not in caplog.text
     assert not db.in_transaction()
     _assert_safe_failure_log(
         caplog,

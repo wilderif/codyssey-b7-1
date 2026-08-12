@@ -21,15 +21,15 @@ PORT=
 
 | 이름 | 기본값·허용값 | 용도와 관리 원칙 |
 | --- | --- | --- |
-| `SESSION_SECRET` | 기본값 없음 | Signed session cookie에 사용하는 secret. Application 시작 전에 비어 있지 않은 값을 제공하고 repository에 실제 값을 기록하지 않음 |
-| `OPENAI_API_KEY` | 기본값 없음 | Server의 OpenAI API 인증 secret. Browser에 노출하거나 repository에 실제 값을 기록하지 않음 |
-| `OPENAI_MODEL` | 설정값: `gpt-5-nano` | Chat answer 생성에 사용할 OpenAI model. 현재 비용 우선 선택값 |
+| `SESSION_SECRET` | 기본값 없음 | Signed session cookie에 사용하는 필수 secret. local·production 모두 Application import 전에 비어 있지 않은 값을 제공하고 repository에 실제 값을 기록하지 않음 |
+| `OPENAI_API_KEY` | 기본값 없음 | Server의 OpenAI API 인증 secret. Local에서는 미설정 상태를 허용하지만 Chat 호출은 거부하며, production에서는 필수다. 제공한 값은 공백일 수 없고 Browser·repository에 실제 값을 기록하지 않음 |
+| `OPENAI_MODEL` | 설정값: `gpt-5-nano` | Chat answer 생성에 사용할 nonblank model. 환경 변수를 공백으로 명시하면 시작을 거부하며, 현재 비용 우선 선택값 |
 | `OPENAI_TIMEOUT_SECONDS` | `30` | OpenAI request timeout. 0보다 큰 숫자만 허용 |
-| `DATABASE_URL` | Local 기본값: `sqlite:///./data/chatbot.db`; 배포 기본값: `sqlite:////data/chatbot.db` | Local SQLite 연결 URL. production에서는 명시적으로 설정하지 않으면 application 시작을 거부해 ephemeral file로의 fallback을 막음 |
+| `DATABASE_URL` | Local 기본값: `sqlite:///./data/chatbot.db`; 배포 기본값: `sqlite:////data/chatbot.db` | Local SQLite 연결 URL. 명시한 값은 공백일 수 없으며 production에서는 명시적으로 설정하지 않으면 application 시작을 거부해 ephemeral file로의 fallback을 막음 |
 | `APP_ENV` | `local`; `production` 허용 | 실행 environment를 구분. `production`에서는 production 보안·설정 validation을 적용 |
 | `LOG_LEVEL` | `INFO` | Application log level |
 | `ADMIN_USERNAME` | `admin` | 자동 생성하는 초기 관리자 username. 기본값은 `admin`이며 앞뒤 공백 제거 후 3~30자를 허용 |
-| `ADMIN_INITIAL_PASSWORD` | 기본값 없음 | 관리자 역할 계정이 없을 때 초기 관리자 bootstrap에 사용하는 secret. 실제 값을 repository에 기록하지 않음 |
+| `ADMIN_INITIAL_PASSWORD` | 기본값 없음 | 관리자 역할 계정이 없을 때 초기 관리자 bootstrap에 사용하는 optional secret. 제공한 값은 공백일 수 없고 실제 값을 repository에 기록하지 않음. admin이 없을 때 필요한지와 password 8~72자 규칙은 Auth startup이 검증 |
 | `PORT` | 기본값 없음 | Railway Variables에서 직접 설정하는 HTTP server port |
 
 `ADMIN_INITIAL_PASSWORD`는 관리자 역할 계정이 하나도 없을 때 Auth startup use case가 사용합니다.
