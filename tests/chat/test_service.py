@@ -106,7 +106,7 @@ class FailingReadRepository(SqlAlchemyChatExchangeRepository):
     """모든 ChatExchange read를 실패시킨다."""
 
     def get_recent_success_exchanges(
-        self, *, user_id: int, limit: int = 5
+        self, *, user_id: int, limit: int
     ) -> list[ChatExchange]:
         raise RuntimeError("context read failed")
 

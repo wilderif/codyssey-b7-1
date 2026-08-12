@@ -46,7 +46,7 @@ class ChatExchangeRepository(Protocol):
         self,
         *,
         user_id: int,
-        limit: int = 5,
+        limit: int,
     ) -> list[ChatExchange]:
         """사용자의 최근 성공 ChatExchange를 반환한다."""
 
@@ -126,11 +126,8 @@ class SqlAlchemyChatExchangeRepository:
         self,
         *,
         user_id: int,
-        limit: int = 5,
+        limit: int,
     ) -> list[ChatExchange]:
-        if not 1 <= limit <= 5:
-            raise ValueError("limit must be between 1 and 5")
-
         statement = (
             select(ChatExchange)
             .where(
