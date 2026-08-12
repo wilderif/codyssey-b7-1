@@ -110,23 +110,28 @@ def test_generate_rejects_response_without_nonblank_text(completion: object) -> 
         _run_generate(generator)
 
 
-def test_openai_configuration_rejects_blank_values(
+def test_openai_configuration_rejects_an_unset_api_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "openai_api_key", SecretStr(""))
-    monkeypatch.setattr(settings, "openai_model", " ")
+    monkeypatch.setattr(settings, "openai_api_key", None)
 
     with pytest.raises(ChatConfigurationError):
         create_openai_client()
-    with pytest.raises(ChatConfigurationError):
-        get_openai_model()
+
+
+def test_get_openai_model_returns_the_configured_value_without_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "openai_model", " test-model ")
+
+    assert get_openai_model() == " test-model "
 
 
 def test_openai_configuration_builds_client_with_retry_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-key"))
-    monkeypatch.setattr(settings, "openai_model", " test-model ")
+    monkeypatch.setattr(settings, "openai_model", "test-model")
     monkeypatch.setattr(settings, "openai_timeout_seconds", 17.0)
 
     client = create_openai_client()

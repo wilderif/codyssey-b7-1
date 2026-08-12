@@ -53,13 +53,12 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     """검증된 설정으로 FastAPI application을 생성한다."""
 
     configured = app_settings or settings
-    session_secret = _require_session_secret(configured)
     _configure_logging(configured.log_level)
 
     application = FastAPI(lifespan=_create_lifespan(configured))
     application.add_middleware(
         SessionMiddleware,
-        secret_key=session_secret,
+        secret_key=configured.session_secret.get_secret_value(),
         max_age=SESSION_MAX_AGE_SECONDS,
         same_site="lax",
         https_only=configured.app_env == "production",
@@ -87,13 +86,6 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     return application
-
-
-def _require_session_secret(app_settings: Settings) -> str:
-    secret = app_settings.session_secret
-    if secret is None or not secret.get_secret_value().strip():
-        raise RuntimeError("SESSION_SECRET environment variable이 필요합니다.")
-    return secret.get_secret_value()
 
 
 def _configure_logging(log_level: str) -> None:

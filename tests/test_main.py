@@ -14,6 +14,7 @@ from uuid import UUID
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
@@ -77,21 +78,11 @@ def main_module(monkeypatch: pytest.MonkeyPatch) -> Generator[ModuleType, None, 
 
 
 @pytest.mark.parametrize("session_secret", [None, "   "])
-def test_main_import_fails_safely_without_session_secret(
-    monkeypatch: pytest.MonkeyPatch,
+def test_missing_session_secret_fails_during_settings_construction(
     session_secret: str | None,
 ) -> None:
-    configured = Settings.model_validate(
-        {"APP_ENV": "local", "SESSION_SECRET": session_secret}
-    )
-    monkeypatch.setattr(config_module, "settings", configured)
-    sys.modules.pop("app.main", None)
-
-    with pytest.raises(RuntimeError, match="SESSION_SECRET") as captured:
-        importlib.import_module("app.main")
-
-    assert "None" not in str(captured.value)
-    sys.modules.pop("app.main", None)
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        Settings.model_validate({"APP_ENV": "local", "SESSION_SECRET": session_secret})
 
 
 def test_create_app_sets_configured_logging_level(main_module: ModuleType) -> None:

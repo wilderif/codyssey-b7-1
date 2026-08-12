@@ -49,13 +49,7 @@ def create_openai_client() -> AsyncOpenAI:
     """공용 settings로 timeout과 retry 정책이 반영된 client를 생성한다."""
 
     api_key = settings.openai_api_key
-    model = settings.openai_model
-    if (
-        api_key is None
-        or not api_key.get_secret_value().strip()
-        or model is None
-        or not model.strip()
-    ):
+    if api_key is None:
         raise ChatConfigurationError()
 
     return AsyncOpenAI(
@@ -68,7 +62,4 @@ def create_openai_client() -> AsyncOpenAI:
 def get_openai_model() -> str:
     """검증된 OpenAI model 이름을 반환한다."""
 
-    model = settings.openai_model
-    if model is None or not model.strip():
-        raise ChatConfigurationError()
-    return model.strip()
+    return settings.openai_model
