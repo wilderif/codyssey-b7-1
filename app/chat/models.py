@@ -2,48 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator
 
 from app.core.database import Base
-
-
-def utc_now() -> datetime:
-    """UTC timezone 정보를 포함한 현재 시각을 반환한다."""
-
-    return datetime.now(UTC)
-
-
-class UTCDateTime(TypeDecorator[datetime]):
-    """SQLite에서도 UTC timezone 정보를 복원하는 datetime type이다."""
-
-    impl = DateTime(timezone=True)
-    cache_ok = True
-
-    def process_bind_param(
-        self,
-        value: datetime | None,
-        dialect: object,
-    ) -> datetime | None:
-        if value is None:
-            return None
-        if value.tzinfo is None:
-            raise ValueError("created_at must be timezone-aware")
-        return value.astimezone(UTC)
-
-    def process_result_value(
-        self,
-        value: datetime | None,
-        dialect: object,
-    ) -> datetime | None:
-        if value is None:
-            return None
-        if value.tzinfo is None:
-            return value.replace(tzinfo=UTC)
-        return value.astimezone(UTC)
+from app.core.db_types import UTCDateTime, utc_now
 
 
 class ChatExchange(Base):
