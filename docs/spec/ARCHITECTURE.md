@@ -64,12 +64,12 @@ app/
 | `app/chat/**` | 질문 검증, 문맥 구성, OpenAI 호출, 사용자 ChatExchange CRUD·저장·조회 | 이상헌 |
 | `app/admin/**` | 관리자 전용 route, read-only 통합 query, 운영 metadata projection | 이상헌 |
 | `app/core/database.py` | SQLAlchemy Base, engine, session factory와 요청별 DB session | 이상헌 |
+| `app/core/db_types.py` | SQLAlchemy model 공용 UTC datetime type과 default factory | 이상헌 |
 | `app/core/config.py` | environment variable loading·type 변환·validation | 이상헌 |
 | `app/core/request_id.py` | HTTP request ID 생성·전달 interface | 김대웅 |
 | `app/core/security.py` | password·session 보안 helper | 김대웅 |
 | 공통 logging·health | log 설정과 필수 event 형식, `GET /health` | 김대웅 |
 | `app/ui/**` | HTML·form router, template, CSS·JavaScript, 화면 흐름 | 김우종 |
-| `docs/spec/DEPLOYMENT.md` | environment variable, local 실행과 deployment 구성 | 김우종 |
 
 ### 공통 원칙
 
@@ -91,8 +91,7 @@ app/
 
 `app/core/config.py`는 environment variable의 loading, type 변환과 값 자체의 validation을 담당합니다.
 정확한 설정 key, 기본값과 환경별 값은 [실행·배포 계약](DEPLOYMENT.md)에서 정의합니다. 각 business
-module은 자신이 소비하는 설정의 use-case 조건을 검증하며, secret 원문을 error, `repr`, log 또는
-console 출력에 노출하지 않습니다.
+module은 자신이 소비하는 설정의 use-case 조건을 검증합니다.
 
 ### Database
 
