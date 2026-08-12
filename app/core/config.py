@@ -56,33 +56,6 @@ class Settings(BaseSettings):
         validation_alias="ADMIN_INITIAL_PASSWORD",
     )
 
-    # APP_ENV는 대소문자 상관없이 받는다.
-    @field_validator("app_env", mode="before")
-    @classmethod
-    def normalize_app_env(cls, value: object) -> object:
-        return value.lower() if isinstance(value, str) else value
-
-    # LOG_LEVEL도 소문자로 넣어도 되게 한다.
-    @field_validator("log_level", mode="before")
-    @classmethod
-    def normalize_log_level(cls, value: object) -> object:
-        return value.upper() if isinstance(value, str) else value
-
-    # 값 검사 전에 ADMIN_USERNAME 앞뒤 공백을 없앤다.
-    @field_validator("admin_username", mode="before")
-    @classmethod
-    def normalize_admin_username(cls, value: object) -> object:
-        return value.strip() if isinstance(value, str) else value
-
-    # OpenAI model은 설정값 자체를 normalize하고 빈 값은 받지 않는다.
-    @field_validator("openai_model")
-    @classmethod
-    def validate_openai_model(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("OPENAI_MODEL은 비어 있을 수 없습니다.")
-        return normalized
-
     # DATABASE_URL은 명시된 경우 공백 값일 수 없다.
     @field_validator("database_url")
     @classmethod
@@ -107,6 +80,15 @@ class Settings(BaseSettings):
             raise ValueError("제공된 secret은 비어 있을 수 없습니다.")
         return value
 
+    # OpenAI model은 설정값 자체를 normalize하고 빈 값은 받지 않는다.
+    @field_validator("openai_model")
+    @classmethod
+    def validate_openai_model(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("OPENAI_MODEL은 비어 있을 수 없습니다.")
+        return normalized
+
     # timeout은 0 이하로 못 넣게 막는다.
     @field_validator("openai_timeout_seconds")
     @classmethod
@@ -114,6 +96,24 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("OPENAI_TIMEOUT_SECONDS는 0보다 커야 합니다.")
         return value
+
+    # APP_ENV는 대소문자 상관없이 받는다.
+    @field_validator("app_env", mode="before")
+    @classmethod
+    def normalize_app_env(cls, value: object) -> object:
+        return value.lower() if isinstance(value, str) else value
+
+    # LOG_LEVEL도 소문자로 넣어도 되게 한다.
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def normalize_log_level(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
+    # 값 검사 전에 ADMIN_USERNAME 앞뒤 공백을 없앤다.
+    @field_validator("admin_username", mode="before")
+    @classmethod
+    def normalize_admin_username(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
     # production일 때 꼭 필요한 설정들이 있는지 본다.
     @model_validator(mode="after")
