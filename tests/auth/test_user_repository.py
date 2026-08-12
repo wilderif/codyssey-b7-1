@@ -5,17 +5,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.auth.models import ADMIN_ROLE, USER_ROLE
-from app.auth.repository import (
-    create_user,
-    get_admin_user,
-    get_user_by_id,
-    get_user_by_username,
-)
+from app.auth.repository import SqlAlchemyUserRepository
 
 
 def test_create_user_flushes_without_committing(db: Session) -> None:
-    user = create_user(
-        db=db,
+    repository = SqlAlchemyUserRepository(db=db)
+
+    user = repository.create_user(
         username="new-user",
         password_hash="test-hash",
     )
@@ -26,47 +22,51 @@ def test_create_user_flushes_without_committing(db: Session) -> None:
 
     db.rollback()
 
-    assert get_user_by_id(db=db, user_id=user.id) is None
+    assert repository.get_user_by_id(user_id=user.id) is None
 
 
 def test_create_and_get_admin_user(db: Session) -> None:
-    user = create_user(
-        db=db,
+    repository = SqlAlchemyUserRepository(db=db)
+
+    user = repository.create_user(
         username="admin-user",
         password_hash="admin-hash",
         role=ADMIN_ROLE,
     )
 
-    assert get_user_by_id(db=db, user_id=user.id) is user
-    assert get_user_by_username(db=db, username=user.username) is user
+    assert repository.get_user_by_id(user_id=user.id) is user
+    assert repository.get_user_by_username(username=user.username) is user
 
 
 def test_get_user_returns_none_when_not_found(db: Session) -> None:
-    assert get_user_by_id(db=db, user_id=999) is None
-    assert get_user_by_username(db=db, username="missing-user") is None
+    repository = SqlAlchemyUserRepository(db=db)
+
+    assert repository.get_user_by_id(user_id=999) is None
+    assert repository.get_user_by_username(username="missing-user") is None
 
 
 def test_get_admin_user_returns_admin_regardless_of_username(db: Session) -> None:
-    create_user(
-        db=db,
+    repository = SqlAlchemyUserRepository(db=db)
+
+    repository.create_user(
         username="regular-user",
         password_hash="user-hash",
     )
-    admin = create_user(
-        db=db,
+    admin = repository.create_user(
         username="configured-elsewhere",
         password_hash="admin-hash",
         role=ADMIN_ROLE,
     )
 
-    assert get_admin_user(db=db) is admin
+    assert repository.get_admin_user() is admin
 
 
 def test_get_admin_user_returns_none_without_admin_role(db: Session) -> None:
-    create_user(
-        db=db,
+    repository = SqlAlchemyUserRepository(db=db)
+
+    repository.create_user(
         username="admin",
         password_hash="user-hash",
     )
 
-    assert get_admin_user(db=db) is None
+    assert repository.get_admin_user() is None
