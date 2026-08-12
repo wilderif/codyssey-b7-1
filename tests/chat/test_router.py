@@ -198,6 +198,35 @@ def test_post_chat_requires_login(client: TestClient) -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("payload", "detail"),
+    [
+        ({"message": "   "}, "질문을 입력해주세요."),
+        ({"message": "a" * 1001}, "질문은 1000자 이하로 입력해주세요."),
+    ],
+)
+def test_post_chat_rejects_semantic_input_before_chat_processing(
+    authenticated_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: dict[str, str],
+    detail: str,
+) -> None:
+    process_calls = 0
+
+    async def fake_process_chat(**_kwargs: object) -> ChatResult:
+        nonlocal process_calls
+        process_calls += 1
+        return ChatResult(1, "answer", datetime(2026, 8, 7, tzinfo=UTC))
+
+    monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
+
+    response = authenticated_client.post("/api/chat", json=payload)
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "validation_error", "detail": detail}
+    assert process_calls == 0
+
+
 def test_post_chat_rejects_deleted_user_before_processing(
     db: Session,
     monkeypatch: pytest.MonkeyPatch,

@@ -148,6 +148,14 @@ async def validation_exception_handler(request: Request, _error: Exception) -> R
         if isinstance(_error, RequestValidationError):
             return await default_validation_exception_handler(request, _error)
         return await unhandled_exception_handler(request, _error)
+    detail_key = _semantic_validation_detail_key(_error)
+    if detail_key is not None:
+        return _error_response(
+            request=request,
+            status_code=400,
+            code="validation_error",
+            detail_key=detail_key,
+        )
     return _error_response(request=request, status_code=422, code="validation_error")
 
 
@@ -189,6 +197,22 @@ def _validation_app_error(error: ChatValidationError) -> AppError:
         ChatValidationReason.MESSAGE_TOO_LONG: "message_too_long",
     }[error.reason]
     return AppError(status_code=400, code="validation_error", detail_key=detail_key)
+
+
+def _semantic_validation_detail_key(error: Exception) -> str | None:
+    """ChatRequest의 의미 검증 오류를 API detail key로 변환한다."""
+
+    if not isinstance(error, RequestValidationError):
+        return None
+    detail_keys = {
+        "empty_message": "empty_message",
+        "message_too_long": "message_too_long",
+    }
+    for validation_error in error.errors():
+        detail_key = detail_keys.get(validation_error["type"])
+        if detail_key is not None:
+            return detail_key
+    return None
 
 
 def _persistence_app_error(error: ChatPersistenceError) -> AppError:
