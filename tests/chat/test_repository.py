@@ -11,21 +11,16 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from app.chat.models import ChatExchange
-from app.chat.repository import (
-    create_failed_exchange,
-    create_success_exchange,
-    get_recent_success_exchanges,
-    get_user_exchange,
-    list_user_exchanges,
-)
+from app.chat.repository import SqlAlchemyChatExchangeRepository
 
 
-def test_create_exchange_functions_flush_expected_states(
+def test_repository_create_exchange_methods_flush_expected_states(
     db: Session,
     user_id: int,
 ) -> None:
-    success = create_success_exchange(
-        db=db,
+    repository = SqlAlchemyChatExchangeRepository(db=db)
+
+    success = repository.create_success_exchange(
         user_id=user_id,
         question="success question",
         answer="success answer",
@@ -33,8 +28,7 @@ def test_create_exchange_functions_flush_expected_states(
         user_agent="test-agent/1.0",
         response_time_ms=12,
     )
-    failed = create_failed_exchange(
-        db=db,
+    failed = repository.create_failed_exchange(
         user_id=user_id,
         question="failed question",
         error_message="openai_timeout",
@@ -87,8 +81,9 @@ def test_chat_exchange_schema_enforces_operational_metadata_contract(
     db: Session,
     user_id: int,
 ) -> None:
-    create_success_exchange(
-        db=db,
+    repository = SqlAlchemyChatExchangeRepository(db=db)
+
+    repository.create_success_exchange(
         user_id=user_id,
         question="first question",
         answer="first answer",
@@ -208,6 +203,7 @@ def test_recent_success_query_filters_user_status_and_limit(
     user_id: int,
     user_id_factory: Callable[[str], int],
 ) -> None:
+    repository = SqlAlchemyChatExchangeRepository(db=db)
     other_user_id = user_id_factory("other-user")
     base_time = datetime(2026, 8, 6, tzinfo=UTC)
     for index in range(6):
@@ -255,7 +251,7 @@ def test_recent_success_query_filters_user_status_and_limit(
     )
     db.commit()
 
-    exchanges = get_recent_success_exchanges(db=db, user_id=user_id)
+    exchanges = repository.get_recent_success_exchanges(user_id=user_id)
 
     assert [exchange.question for exchange in exchanges] == [
         "question-5",
@@ -270,6 +266,7 @@ def test_recent_success_query_uses_id_as_created_at_tie_breaker(
     db: Session,
     user_id: int,
 ) -> None:
+    repository = SqlAlchemyChatExchangeRepository(db=db)
     same_time = datetime(2026, 8, 6, tzinfo=UTC)
     db.add_all(
         [
@@ -301,7 +298,7 @@ def test_recent_success_query_uses_id_as_created_at_tie_breaker(
     )
     db.commit()
 
-    exchanges = get_recent_success_exchanges(db=db, user_id=user_id)
+    exchanges = repository.get_recent_success_exchanges(user_id=user_id)
 
     assert [exchange.question for exchange in exchanges] == ["second", "first"]
 
@@ -312,8 +309,10 @@ def test_recent_success_query_rejects_limit_outside_context_contract(
     user_id: int,
     limit: int,
 ) -> None:
+    repository = SqlAlchemyChatExchangeRepository(db=db)
+
     with pytest.raises(ValueError, match="between 1 and 5"):
-        get_recent_success_exchanges(db=db, user_id=user_id, limit=limit)
+        repository.get_recent_success_exchanges(user_id=user_id, limit=limit)
 
 
 def test_list_user_exchanges_returns_only_user_history_newest_first(
@@ -321,6 +320,7 @@ def test_list_user_exchanges_returns_only_user_history_newest_first(
     user_id: int,
     user_id_factory: Callable[[str], int],
 ) -> None:
+    repository = SqlAlchemyChatExchangeRepository(db=db)
     other_user_id = user_id_factory("history-other-user")
     base_time = datetime(2026, 8, 6, tzinfo=UTC)
     db.add_all(
@@ -365,7 +365,7 @@ def test_list_user_exchanges_returns_only_user_history_newest_first(
     )
     db.commit()
 
-    exchanges = list_user_exchanges(db=db, user_id=user_id)
+    exchanges = repository.list_user_exchanges(user_id=user_id)
 
     assert [exchange.question for exchange in exchanges] == ["new failed", "old"]
 
@@ -375,9 +375,9 @@ def test_get_user_exchange_returns_only_the_requesting_users_record(
     user_id: int,
     user_id_factory: Callable[[str], int],
 ) -> None:
+    repository = SqlAlchemyChatExchangeRepository(db=db)
     other_user_id = user_id_factory("single-history-other-user")
-    own_exchange = create_success_exchange(
-        db=db,
+    own_exchange = repository.create_success_exchange(
         user_id=user_id,
         question="mine",
         answer="my answer",
@@ -385,8 +385,7 @@ def test_get_user_exchange_returns_only_the_requesting_users_record(
         user_agent=None,
         response_time_ms=1,
     )
-    other_exchange = create_success_exchange(
-        db=db,
+    other_exchange = repository.create_success_exchange(
         user_id=other_user_id,
         question="other",
         answer="other answer",
@@ -396,17 +395,18 @@ def test_get_user_exchange_returns_only_the_requesting_users_record(
     )
     db.commit()
 
-    own_result = get_user_exchange(
-        db=db,
+    own_result = repository.get_user_exchange(
         user_id=user_id,
         chat_exchange_id=own_exchange.id,
     )
-    foreign_result = get_user_exchange(
-        db=db,
+    foreign_result = repository.get_user_exchange(
         user_id=user_id,
         chat_exchange_id=other_exchange.id,
     )
-    missing_result = get_user_exchange(db=db, user_id=user_id, chat_exchange_id=9999)
+    missing_result = repository.get_user_exchange(
+        user_id=user_id,
+        chat_exchange_id=9999,
+    )
 
     assert own_result is not None
     assert own_result.id == own_exchange.id
