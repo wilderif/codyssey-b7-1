@@ -47,6 +47,8 @@ cp .env.example .env
 
 `.env`에서 실제 값을 입력합니다. `.env`는 `.gitignore`에 포함되어 있으므로 commit하지 않습니다.
 
+`OPENAI_API_KEY`는 server 설정에서만 읽어 OpenAI API 요청에 사용합니다. Browser·frontend code와 API response에는 key를 포함하거나 노출하지 않습니다.
+
 | 이름 | `.env.example` 값·기본값 | 설명 |
 | --- | --- | --- |
 | `SESSION_SECRET` | 없음 | Signed session cookie용 secret. 실행 시 필수 |
@@ -167,7 +169,17 @@ Static asset은 `app/main.py`에서 `/static`에 mount하며 모든 화면이 �
 
 대화에는 사용자 질문·답변이라는 개인별 정보가 저장되고, AI 호출은 외부 API 비용과 남용 위험을 발생시키므로 사용자 식별과 소유권 검사가 필요합니다. 따라서 비로그인 사용자의 질문·기록 접근을 차단해 다른 사용자의 기록 노출을 막고, 요청을 책임 있는 사용자와 연결하는 것을 보안·운영 정책의 근거로 삼습니다.
 
+### 회원가입 처리 흐름
+
+회원가입 form의 `POST /signup` 요청은 username 공백을 정리한 뒤 Auth Service로 전달됩니다. Service는 username·password와 중복 username을 검증하고, 통과하면 password hash를 적용한 User를 생성해 DB transaction으로 저장한 뒤 `/login`으로 이동시킵니다. 입력 검증 또는 중복 username이면 안전한 오류 메시지를 같은 form에 표시하며, DB 오류가 발생하면 transaction을 rollback합니다.
+
 인증은 JWT가 아닌 Starlette의 signed session cookie를 사용합니다. Session에는 사용자 ID만 저장하며 만료 시간은 8시간이고, cookie에는 `HttpOnly`, `SameSite=Lax`, production 환경의 `Secure` 설정을 적용합니다.
+
+### 세션·토큰 인증 방식 선택
+
+현재는 same-origin Browser form과 server-rendered UI가 중심이므로, client에 bearer token을 별도로 보관하지 않는 signed session cookie를 선택했습니다. Session에는 최소한의 사용자 ID만 넣고 요청마다 DB User를 대조해 logout과 삭제된 User의 접근을 즉시 반영합니다.
+
+향후 mobile app·외부 client처럼 cross-origin 또는 stateless API 인증이 필요해지면 JWT access token과 refresh token 방식을 도입할 수 있습니다. 이때 access token은 짧은 만료 시간으로 발급하고 `issuer`·`audience`·서명 algorithm·만료 시간을 검증하며, refresh token은 안전한 storage와 rotation 정책으로 관리합니다.
 
 보호된 HTML route와 JSON API는 session의 사용자 ID를 실제 DB User와 대조합니다. User가 삭제된 stale session은 즉시 제거하며, HTML route는 `/login`으로 이동하고 JSON API는 Chat·OpenAI 처리 전에 `401 not_authenticated`를 반환합니다.
 
@@ -371,6 +383,8 @@ sqlite3 /absolute/path/to/chatbot.db < scripts/check_logs.sql
 ```
 
 Script는 사용자 역할, 최근 ChatExchange 20건, 실패 record 불변식, 사용자별 대화 수, 운영 metadata와 Admin 9-field projection을 순서대로 출력합니다. `password_hash`, 질문·답변 원문, cookie와 secret은 운영 확인 출력에서 제외합니다.
+
+질문 처리마다 저장되는 `status`, `error_code`, `response_time_ms`, `request_id`와 선택적 `user_agent`는 개인정보 원문 없이 운영 log로 활용합니다. 운영자는 실패 유형·응답 지연·요청 ID를 기준으로 장애를 추적하고, 사용자별 사용량과 실패 추이를 점검해 안정성 개선 우선순위를 정합니다.
 
 ## 팀 구성과 담당 작업
 
