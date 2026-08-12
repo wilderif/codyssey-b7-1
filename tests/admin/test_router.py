@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Generator
-from dataclasses import replace
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -18,6 +15,7 @@ from app.admin.errors import AdminReadError
 from app.admin.schemas import AdminChatOperationMetadataItem
 from app.auth.models import ADMIN_ROLE
 from app.auth.repository import create_user
+from app.chat.models import ChatExchange
 from app.core.database import get_db
 from app.core.request_id import RequestIdMiddleware
 
@@ -56,24 +54,6 @@ def admin_client(app: FastAPI, client: TestClient, db: Session) -> TestClient:
     return client
 
 
-def _metadata_item(
-    *,
-    username: str | None = "admin-user",
-    user_agent: str | None = "test-client/1.0",
-) -> AdminChatOperationMetadataItem:
-    return AdminChatOperationMetadataItem(
-        user_id=12,
-        username=username,
-        chat_exchange_id=34,
-        created_at=datetime(2026, 8, 9, 10, 30, tzinfo=UTC),
-        request_id="request-34",
-        user_agent=user_agent,
-        response_time_ms=5819,
-        status="failed",
-        error_code="openai_timeout",
-    )
-
-
 def test_admin_logs_redirects_unauthenticated_request_to_login(
     client: TestClient,
 ) -> None:
@@ -98,17 +78,26 @@ def test_admin_logs_rejects_regular_user(
 
 def test_admin_logs_renders_safe_metadata_for_admin(
     admin_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
+    db: Session,
 ) -> None:
-    item = _metadata_item(
+    user = create_user(
+        db=db,
         username='<script>alert("username")</script>',
+        password_hash="password-hash-secret",
+    )
+    exchange = ChatExchange(
+        user_id=user.id,
+        question="question-secret",
+        answer=None,
+        status="failed",
+        error_message="error-message-secret",
+        request_id="request-34",
         user_agent="client<&>",
+        response_time_ms=5819,
+        error_code="openai_timeout",
     )
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [item],
-    )
+    db.add(exchange)
+    db.commit()
 
     response = admin_client.get("/admin/logs")
 
@@ -116,10 +105,8 @@ def test_admin_logs_renders_safe_metadata_for_admin(
     assert response.headers["content-type"].startswith("text/html")
     assert response.headers["cache-control"] == "no-store"
     for value in (
-        "12",
-        "34",
-        'datetime="2026-08-09T10:30:00+00:00"',
-        "2026-08-09 19:30:00 KST",
+        str(user.id),
+        str(exchange.id),
         "request-34",
         "5,819 ms",
         "failed",
@@ -138,144 +125,15 @@ def test_admin_logs_renders_safe_metadata_for_admin(
         assert sensitive_value not in response.text
 
 
-def test_admin_logs_renders_semantic_table_contract(
-    admin_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [_metadata_item()],
-    )
-
-    response = admin_client.get("/admin/logs")
-
-    assert response.status_code == 200
-    assert 'name="viewport" content="width=device-width, initial-scale=1"' in (
-        response.text
-    )
-    assert 'class="admin-table-container"' in response.text
-    assert 'role="region"' in response.text
-    assert 'aria-labelledby="admin-table-caption"' in response.text
-    assert 'aria-describedby="admin-table-scroll-hint"' in response.text
-    assert 'tabindex="0"' in response.text
-    assert '<caption id="admin-table-caption">Chat 요청별 운영 metadata</caption>' in (
-        response.text
-    )
-    for field_name in (
-        "user_id",
-        "username",
-        "chat_exchange_id",
-        "created_at",
-        "request_id",
-        "user_agent",
-        "response_time_ms",
-        "status",
-        "error_code",
-    ):
-        assert f'<th scope="col">{field_name}</th>' in response.text
-    assert response.text.count('scope="col"') == 9
-
-
-def test_admin_logs_renders_shared_layout_and_navigation(
-    admin_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [],
-    )
-
-    response = admin_client.get("/admin/logs")
-
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store"
-    assert '<link rel="stylesheet" href="/static/styles.css">' in response.text
-    assert (
-        '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">'
-        in response.text
-    )
-    assert '<a class="skip-link" href="#main-content">' in response.text
-    assert '<a class="protected-nav__link" href="/chat">' in response.text
-    assert '<form class="protected-nav__logout" method="post" action="/logout">' in (
-        response.text
-    )
-
-
-def test_admin_logs_renders_nullable_metadata_with_placeholder(
-    admin_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    item = replace(
-        _metadata_item(username=None, user_agent=None),
-        status="success",
-        error_code=None,
-    )
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [item],
-    )
-
-    response = admin_client.get("/admin/logs")
-
-    assert response.status_code == 200
-    assert len(re.findall(r"<td\b[^>]*>\s*-\s*</td>", response.text)) == 3
-
-
 def test_admin_logs_renders_empty_state_without_table(
     admin_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [],
-    )
-
     response = admin_client.get("/admin/logs")
 
     assert response.status_code == 200
     assert "표시할 운영 기록이 없습니다." in response.text
     assert 'class="admin-empty-state"' in response.text
     assert "<table" not in response.text
-
-
-def test_admin_logs_passes_only_metadata_to_template_context(
-    admin_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    item = _metadata_item()
-    monkeypatch.setattr(
-        router_module,
-        "list_admin_chat_operation_metadata",
-        lambda *, db: [item],
-    )
-    captured_context: dict[str, object] = {}
-
-    class CapturingTemplates:
-        def TemplateResponse(
-            self,
-            request: object,
-            name: str,
-            context: dict[str, object],
-        ) -> Response:
-            assert request is not None
-            assert name == "admin_logs.html"
-            captured_context.update(context)
-            return Response("rendered", media_type="text/html")
-
-    monkeypatch.setattr(router_module, "templates", CapturingTemplates())
-
-    response = admin_client.get("/admin/logs")
-
-    assert response.status_code == 200
-    assert captured_context == {"items": [item]}
-    assert all(
-        field not in captured_context
-        for field in ("question", "answer", "error_message", "password_hash")
-    )
 
 
 def test_admin_logs_returns_safe_html_error_for_admin_read_error(

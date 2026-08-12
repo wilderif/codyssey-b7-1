@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
@@ -15,20 +15,6 @@ from app.core.config import settings
 
 class Base(DeclarativeBase):
     """모든 application model이 공유하는 declarative base다."""
-
-
-_database_url = make_url(settings.database_url)
-_connect_args = (
-    {"check_same_thread": False} if _database_url.get_backend_name() == "sqlite" else {}
-)
-
-engine = create_engine(_database_url, connect_args=_connect_args)
-SessionLocal = sessionmaker(
-    bind=engine,
-    autocommit=False,
-    autoflush=False,
-    class_=Session,
-)
 
 
 def _enable_sqlite_foreign_keys(
@@ -51,8 +37,29 @@ def _enable_sqlite_foreign_keys(
             dbapi_connection.autocommit = previous_autocommit
 
 
-if _database_url.get_backend_name() == "sqlite":
-    event.listen(engine, "connect", _enable_sqlite_foreign_keys)
+def create_database_engine(database_url: str) -> Engine:
+    """URL에 맞는 engine을 만들고 SQLite connection 계약을 적용한다."""
+
+    parsed_url = make_url(database_url)
+    connect_args = (
+        {"check_same_thread": False}
+        if parsed_url.get_backend_name() == "sqlite"
+        else {}
+    )
+    created_engine = create_engine(parsed_url, connect_args=connect_args)
+    if parsed_url.get_backend_name() == "sqlite":
+        event.listen(created_engine, "connect", _enable_sqlite_foreign_keys)
+    return created_engine
+
+
+_database_url = make_url(settings.database_url)
+engine = create_database_engine(settings.database_url)
+SessionLocal = sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False,
+    class_=Session,
+)
 
 
 def get_db() -> Generator[Session, None, None]:

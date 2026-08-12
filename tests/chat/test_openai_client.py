@@ -100,6 +100,7 @@ def test_generate_maps_api_error_to_chat_generation_error() -> None:
         SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="   "))]
         ),
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=1))]),
     ],
 )
 def test_generate_rejects_response_without_nonblank_text(completion: object) -> None:

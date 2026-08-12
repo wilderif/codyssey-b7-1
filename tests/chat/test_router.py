@@ -137,6 +137,26 @@ def test_post_chat_returns_contract_and_passes_user_agent(
     }
 
 
+@pytest.mark.parametrize("message", ["x", "a" * 1000])
+def test_post_chat_accepts_both_message_length_boundaries(
+    authenticated_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    message: str,
+) -> None:
+    received: dict[str, object] = {}
+
+    async def fake_process_chat(**kwargs: object) -> ChatResult:
+        received.update(kwargs)
+        return ChatResult(1, "answer", datetime(2026, 8, 7, tzinfo=UTC))
+
+    monkeypatch.setattr(router_module, "process_chat", fake_process_chat)
+
+    response = authenticated_client.post("/api/chat", json={"message": message})
+
+    assert response.status_code == 200
+    assert received["message"] == message
+
+
 @pytest.mark.parametrize(
     ("header_value", "expected_user_agent"),
     [
@@ -267,12 +287,32 @@ def test_post_chat_returns_validation_error_for_malformed_json(
 
 
 @pytest.mark.parametrize(
-    ("error", "status_code", "code"),
+    ("error", "status_code", "code", "detail"),
     [
-        (ChatGenerationError(), 502, "openai_api_error"),
-        (ChatTimeoutError(), 504, "openai_timeout"),
-        (ChatPersistenceError(), 500, "db_save_error"),
-        (RuntimeError("select * from secret_cookie"), 500, "internal_error"),
+        (
+            ChatGenerationError(),
+            502,
+            "openai_api_error",
+            "AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+        ),
+        (
+            ChatTimeoutError(),
+            504,
+            "openai_timeout",
+            "AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.",
+        ),
+        (
+            ChatPersistenceError(),
+            500,
+            "db_save_error",
+            "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        ),
+        (
+            RuntimeError("select * from secret_cookie"),
+            500,
+            "internal_error",
+            "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        ),
     ],
 )
 def test_post_chat_returns_safe_error_for_processing_failures(
@@ -281,6 +321,7 @@ def test_post_chat_returns_safe_error_for_processing_failures(
     error: Exception,
     status_code: int,
     code: str,
+    detail: str,
 ) -> None:
     async def failing_process_chat(**_kwargs: object) -> ChatResult:
         raise error
@@ -290,7 +331,7 @@ def test_post_chat_returns_safe_error_for_processing_failures(
     response = authenticated_client.post("/api/chat", json={"message": "question"})
 
     assert response.status_code == status_code
-    assert response.json()["code"] == code
+    assert response.json() == {"code": code, "detail": detail}
     assert "select" not in response.text
     assert "secret_cookie" not in response.text
 
@@ -474,6 +515,9 @@ def test_non_api_unhandled_error_returns_safe_html_response(
         ("ko-KR,ko;q=0.9", "로그인이 필요합니다."),
         ("fr", "로그인이 필요합니다."),
         ("en;q=invalid", "로그인이 필요합니다."),
+        ("?", "로그인이 필요합니다."),
+        ("en;level=1", "로그인이 필요합니다."),
+        ("en;q=1.5", "로그인이 필요합니다."),
     ],
 )
 def test_error_detail_uses_supported_locale_or_korean_fallback(
