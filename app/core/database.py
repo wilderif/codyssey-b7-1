@@ -12,6 +12,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
+SQLITE_BACKEND_NAME = "sqlite"
+
 
 class Base(DeclarativeBase):
     """모든 application model이 공유하는 declarative base다."""
@@ -43,11 +45,11 @@ def create_database_engine(database_url: str) -> Engine:
     parsed_url = make_url(database_url)
     connect_args = (
         {"check_same_thread": False}
-        if parsed_url.get_backend_name() == "sqlite"
+        if parsed_url.get_backend_name() == SQLITE_BACKEND_NAME
         else {}
     )
     created_engine = create_engine(parsed_url, connect_args=connect_args)
-    if parsed_url.get_backend_name() == "sqlite":
+    if parsed_url.get_backend_name() == SQLITE_BACKEND_NAME:
         event.listen(created_engine, "connect", _enable_sqlite_foreign_keys)
     return created_engine
 
@@ -83,7 +85,11 @@ def init_db() -> None:
 
 
 def _ensure_sqlite_directory(url: URL) -> None:
-    if url.get_backend_name() != "sqlite" or url.database in (None, "", ":memory:"):
+    if url.get_backend_name() != SQLITE_BACKEND_NAME or url.database in (
+        None,
+        "",
+        ":memory:",
+    ):
         return
 
     Path(url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)

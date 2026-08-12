@@ -7,6 +7,8 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_DATABASE_URL = "sqlite:///./data/chatbot.db"
+DEFAULT_OPENAI_MODEL = "gpt-5-nano"
 PUBLIC_SESSION_SECRET_PLACEHOLDER = "change-me-for-local-development"
 
 
@@ -21,7 +23,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(
-        default="sqlite:///./data/chatbot.db",
+        default=DEFAULT_DATABASE_URL,
         validation_alias="DATABASE_URL",
     )
     session_secret: SecretStr = Field(validation_alias="SESSION_SECRET")
@@ -30,7 +32,7 @@ class Settings(BaseSettings):
         validation_alias="OPENAI_API_KEY",
     )
     openai_model: str = Field(
-        default="gpt-5-nano",
+        default=DEFAULT_OPENAI_MODEL,
         validation_alias="OPENAI_MODEL",
     )
     openai_timeout_seconds: float = Field(
