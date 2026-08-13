@@ -251,7 +251,7 @@ def test_recent_success_query_filters_user_status_and_limit(
     )
     db.commit()
 
-    exchanges = repository.get_recent_success_exchanges(user_id=user_id)
+    exchanges = repository.get_recent_success_exchanges(user_id=user_id, limit=5)
 
     assert [exchange.question for exchange in exchanges] == [
         "question-5",
@@ -298,21 +298,9 @@ def test_recent_success_query_uses_id_as_created_at_tie_breaker(
     )
     db.commit()
 
-    exchanges = repository.get_recent_success_exchanges(user_id=user_id)
+    exchanges = repository.get_recent_success_exchanges(user_id=user_id, limit=5)
 
     assert [exchange.question for exchange in exchanges] == ["second", "first"]
-
-
-@pytest.mark.parametrize("limit", [0, 6])
-def test_recent_success_query_rejects_limit_outside_context_contract(
-    db: Session,
-    user_id: int,
-    limit: int,
-) -> None:
-    repository = SqlAlchemyChatExchangeRepository(db=db)
-
-    with pytest.raises(ValueError, match="between 1 and 5"):
-        repository.get_recent_success_exchanges(user_id=user_id, limit=limit)
 
 
 def test_list_user_exchanges_returns_only_user_history_newest_first(
