@@ -295,7 +295,7 @@ Cookie: session=<signed-session>
 | `401` | `not_authenticated` | 로그인 session 없음 |
 | `404` | `conversation_not_found` | 기록 없음 또는 다른 사용자 소유 |
 | `422` | `validation_error` | 필드 누락, 잘못된 자료형·JSON |
-| `500` | `db_save_error`, `internal_error` | DB 저장 실패 또는 내부 오류 |
+| `500` | `internal_error` | DB 저장·조회 실패를 포함한 내부 오류 |
 | `502` | `openai_api_error` | OpenAI API 오류 |
 | `504` | `openai_timeout` | OpenAI request timeout |
 

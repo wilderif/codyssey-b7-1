@@ -10,20 +10,6 @@ HTTP status·request·response·오류 `code`는 [API 계약](../api/API.md), mo
 - `app/ui`가 Jinja2로 HTML을 server rendering하고 Browser JavaScript가 `POST /api/chat`을
   호출합니다.
 - Frontend는 별도 build 과정 없이 HTML, CSS, vanilla JavaScript로 구성합니다.
-- `app/ui/router.py`는 `GET /`, 회원가입·Login·Logout form route와 `GET /chat`을 소유합니다.
-  `/admin/logs`는 중복 등록하지 않습니다.
-- 화면 router는 Auth public helper·Chat Service만 호출하고 Repository, ORM model과 OpenAI를 직접
-  호출하지 않습니다.
-  관리자 화면의 `/admin/logs` route와 관리자 데이터 조합은 `app/admin/router.py`가 소유하며,
-  `app/ui`는 `admin_logs.html`과 공통 CSS·JavaScript 등 표현 자원만 제공합니다.
-- 최소 UI file은 `router.py`, `templates/signup.html`, `templates/login.html`,
-  `templates/chat.html`, 기존 `templates/admin_logs.html`, `static/styles.css`,
-  `static/chat.js`입니다. 공통 base template 사용 여부는 구현 세부사항입니다.
-- `app/main.py`는 UI router를 한 번 등록하고 `app/ui/static`을 `/static`에 mount합니다. Template은
-  `/static/styles.css`를 사용하고 Chat 화면만 `/static/chat.js`를 추가로 사용합니다.
-- 보호 HTML 화면은 Auth의 `require_authenticated_user()`가 반환하는 `user_id`와 `is_admin`만
-  사용합니다. 이 public interface가 Auth module에 먼저 추가되어야 하며 UI가 Auth Repository 직접
-  조회로 우회하지 않습니다.
 - 초기 버전에는 React 등 UI framework, 상태관리 library, toast package, streaming, 자동 retry,
   별도 animation library를 도입하지 않습니다.
 - 구체적인 색상, spacing, typography 값은 구현 세부사항입니다. 다만 모든 화면에서 같은 시각
@@ -254,7 +240,7 @@ Request를 시작한 뒤 받은 `POST /api/chat` 오류는 다음 기준으로 p
 | --- | --- |
 | `validation_error` | pending Chat 항목의 AI 답변을 안전한 `detail`로 교체 |
 | `not_authenticated` | `/login`으로 이동 |
-| `db_save_error`, `internal_error`, `openai_api_error`, `openai_timeout` | pending Chat 항목의 AI 답변을 안전한 `detail`로 교체 |
+| `internal_error`, `openai_api_error`, `openai_timeout` | pending Chat 항목의 AI 답변을 안전한 `detail`로 교체 |
 | network 오류, JSON이 아닌 응답, 문자열이 아닌 `detail`, 알 수 없는 `code` | pending Chat 항목의 AI 답변을 `요청을 처리하지 못했습니다.`로 교체 |
 
 정확한 status·`code`·`detail`은 [API 계약의 오류 응답](../api/API.md#6-오류-응답)을
