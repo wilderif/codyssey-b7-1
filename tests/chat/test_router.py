@@ -333,7 +333,7 @@ def test_post_chat_returns_validation_error_for_malformed_json(
         (
             ChatPersistenceError(),
             500,
-            "db_save_error",
+            "internal_error",
             "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
         ),
         (

@@ -204,10 +204,9 @@ def _semantic_validation_detail_key(error: Exception) -> str | None:
 
 
 def _persistence_app_error(error: ChatPersistenceError) -> AppError:
-    """저장 실패만 db_save_error로, 조회 실패는 internal_error로 변환한다."""
+    """Persistence 실패를 안전한 내부 오류로 변환한다."""
 
-    code = "db_save_error" if error.is_write else "internal_error"
-    return AppError(status_code=500, code=code)
+    return AppError(status_code=500, code="internal_error")
 
 
 def _normalize_user_agent(user_agent: str | None) -> str | None:

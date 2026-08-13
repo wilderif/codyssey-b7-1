@@ -7,7 +7,6 @@
   // Server error codes whose detail is safe to show to the user.
   const DISPLAYABLE_ERROR_CODES = new Set([
     "validation_error",
-    "db_save_error",
     "internal_error",
     "openai_api_error",
     "openai_timeout",
