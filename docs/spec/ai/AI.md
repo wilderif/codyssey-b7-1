@@ -73,12 +73,3 @@ timeout 기준에 도달하기 전의 응답 지연에는 speculative retry나 �
 [API 계약](../api/API.md)을 따릅니다.
 
 timeout 값과 API key를 포함한 실행 설정은 [실행·배포 계약](../DEPLOYMENT.md)을 따릅니다.
-
-## 6. 관련 구현
-
-| 경로 | 책임 |
-| --- | --- |
-| `app/chat/service.py` | Chat use case, context 조회, model 전달, 성공·실패 record transaction |
-| `app/chat/context.py` | 고정 system prompt와 OpenAI message 목록 구성 |
-| `app/chat/openai_client.py` | AsyncOpenAI client와 Chat Completions 호출, SDK error 변환 |
-| `app/chat/repository.py` | 사용자별 성공 대화 context query |

@@ -138,8 +138,8 @@ flowchart LR
 | `app/auth/service.py` | 회원가입, login 인증, 초기 관리자 bootstrap과 transaction 처리 |
 | `app/auth/dependencies.py` | Session user ID helper, JSON API 로그인 검사, 관리자 권한 검사 |
 | `app/chat/router.py` | Chat·본인 기록 JSON endpoint와 공통 JSON 오류 응답 |
-| `app/chat/schemas.py` | Chat request·response와 오류 Pydantic schema |
-| `app/chat/service.py` | 입력 검증, 사용자 문맥 조회, OpenAI 호출, 성공·실패 기록 transaction |
+| `app/chat/schemas.py` | Chat request·response와 오류 Pydantic schema, 질문 입력 정규화·검증 |
+| `app/chat/service.py` | 사용자 문맥 조회, OpenAI 호출, 성공·실패 기록 transaction |
 | `app/chat/context.py` | System prompt와 최근 성공 대화를 OpenAI message로 구성 |
 | `app/chat/openai_client.py` | OpenAI SDK adapter, model·timeout 적용, API 오류 변환 |
 | `app/chat/models.py` | `chat_exchanges` ORM model과 DB constraint |
@@ -295,7 +295,7 @@ Cookie: session=<signed-session>
 | `401` | `not_authenticated` | 로그인 session 없음 |
 | `404` | `conversation_not_found` | 기록 없음 또는 다른 사용자 소유 |
 | `422` | `validation_error` | 필드 누락, 잘못된 자료형·JSON |
-| `500` | `db_save_error`, `internal_error` | DB 저장 실패 또는 내부 오류 |
+| `500` | `internal_error` | DB 저장·조회 실패를 포함한 내부 오류 |
 | `502` | `openai_api_error` | OpenAI API 오류 |
 | `504` | `openai_timeout` | OpenAI request timeout |
 

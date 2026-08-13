@@ -307,7 +307,6 @@ def test_chat_interaction_script_preserves_static_safety_and_api_contract() -> N
     for known_error_code in (
         "validation_error",
         "not_authenticated",
-        "db_save_error",
         "internal_error",
         "openai_api_error",
         "openai_timeout",

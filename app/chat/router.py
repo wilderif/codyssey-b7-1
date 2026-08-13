@@ -21,8 +21,6 @@ from app.chat.errors import (
     ChatGenerationError,
     ChatPersistenceError,
     ChatTimeoutError,
-    ChatValidationError,
-    ChatValidationReason,
 )
 from app.chat.i18n import get_message
 from app.chat.schemas import (
@@ -66,8 +64,6 @@ async def post_chat(
             user_agent=_normalize_user_agent(request.headers.get("user-agent")),
             db=db,
         )
-    except ChatValidationError as error:
-        raise _validation_app_error(error) from error
     except ChatTimeoutError as error:
         raise AppError(status_code=504, code="openai_timeout") from error
     except ChatGenerationError as error:
@@ -191,14 +187,6 @@ async def unhandled_exception_handler(request: Request, _error: Exception) -> Re
     return response
 
 
-def _validation_app_error(error: ChatValidationError) -> AppError:
-    detail_key = {
-        ChatValidationReason.EMPTY_MESSAGE: "empty_message",
-        ChatValidationReason.MESSAGE_TOO_LONG: "message_too_long",
-    }[error.reason]
-    return AppError(status_code=400, code="validation_error", detail_key=detail_key)
-
-
 def _semantic_validation_detail_key(error: Exception) -> str | None:
     """ChatRequest의 의미 검증 오류를 API detail key로 변환한다."""
 
@@ -216,10 +204,9 @@ def _semantic_validation_detail_key(error: Exception) -> str | None:
 
 
 def _persistence_app_error(error: ChatPersistenceError) -> AppError:
-    """저장 실패만 db_save_error로, 조회 실패는 internal_error로 변환한다."""
+    """Persistence 실패를 안전한 내부 오류로 변환한다."""
 
-    code = "db_save_error" if error.is_write else "internal_error"
-    return AppError(status_code=500, code=code)
+    return AppError(status_code=500, code="internal_error")
 
 
 def _normalize_user_agent(user_agent: str | None) -> str | None:

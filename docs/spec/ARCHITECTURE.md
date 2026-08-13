@@ -24,8 +24,8 @@ SQLite                                OpenAI API
 | Browser | 회원가입·login, 질문 입력, AI 답변과 본인 기록 확인, 관리자 운영 metadata 조회 |
 | `app/main.py` | FastAPI application 생성, SessionMiddleware와 router 등록, DB·관리자 초기화 조립 |
 | `app/auth` | User, 회원가입·login·logout, password 검증, 인증·관리자 dependency |
-| `app/chat` | 질문 검증, 사용자 대화 문맥, OpenAI 호출, 사용자 ChatExchange 저장·조회 |
-| `app/admin` | 관리자 전용 route, read-only 통합 조회, 운영 metadata projection |
+| `app/chat` | 질문 검증, OpenAI 호출, 사용자 ChatExchange 저장·조회 |
+| `app/admin` | 관리자 전용 route와 운영 metadata 조회 |
 | `app/core` | environment variable, SQLAlchemy Base·DB session, 보안, request ID, 공통 logging |
 | `app/ui` | Jinja2 화면 router, chat·본인 기록·관리자 template, CSS·JavaScript static asset |
 | SQLite | 사용자, 질문·답변 쌍, 상태, UTC 시각, 요청별 운영 metadata 저장 |
@@ -61,8 +61,8 @@ app/
 | --- | --- | --- |
 | `app/main.py` | application 생성, SessionMiddleware, router 등록, health, DB·관리자 초기화 | 김대웅 |
 | `app/auth/**` | User, 회원가입·login·logout, password, 인증·관리자 dependency | 김대웅 |
-| `app/chat/**` | 질문 검증, 문맥 구성, OpenAI 호출, 사용자 ChatExchange CRUD·저장·조회 | 이상헌 |
-| `app/admin/**` | 관리자 전용 route, read-only 통합 query, 운영 metadata projection | 이상헌 |
+| `app/chat/**` | 질문 검증, OpenAI 호출, 사용자 ChatExchange 저장·조회 | 이상헌 |
+| `app/admin/**` | 관리자 전용 route와 운영 metadata 조회 | 이상헌 |
 | `app/core/database.py` | SQLAlchemy Base, engine, session factory와 요청별 DB session | 이상헌 |
 | `app/core/db_types.py` | SQLAlchemy model 공용 UTC datetime type과 default factory | 이상헌 |
 | `app/core/config.py` | environment variable loading·type 변환·validation | 이상헌 |
@@ -193,25 +193,12 @@ class AuthenticatedUser:
 
 ### Chat → Auth·UI
 
-```python
-from app.chat.service import (
-    get_chat_exchange,
-    list_chat_exchange_history,
-    process_chat,
-)
-```
-
-- `process_chat()`은 질문 검증, 사용자 대화 문맥, OpenAI 호출과 성공·실패 record 저장을
-  책임집니다. 성공 또는 실패 record 저장이 완료된 뒤 결과나 OpenAI 오류를 반환합니다.
-- 사용 model, system prompt와 OpenAI message 구성의 상세 계약은 [AI 호출 계약](ai/AI.md)을
-  따릅니다.
-- Chat Router는 공용 request ID interface에서 받은 ID를 `process_chat()`에 명시적으로
-  전달합니다.
-- DB 저장 실패는 rollback하며, 외부 HTTP 결과는 [API 계약](api/API.md)을 따릅니다.
-- History는 로그인 사용자의 record만 최신순으로 제공하며 내부 `error_message`와 운영
-  metadata를 포함하지 않습니다.
-- `get_chat_exchange()`는 `chat_exchange_id`와 `user_id`를 함께 조건으로 조회합니다. 없는 ID와
-  다른 사용자의 ID는 모두 `None`을 반환하고 Router가 같은 API 결과로 변환합니다.
+- Chat은 Auth가 제공한 사용자 식별자와 request ID를 받아 질문을 처리하고, 사용자 소유 대화 기록을
+  제공합니다.
+- 질문의 Pydantic validation, OpenAI 호출과 message 구성은 각각 [API 계약](api/API.md)과
+  [AI 호출 계약](ai/AI.md)을 따릅니다.
+- 사용자용 history는 안전한 field만 제공하며, 내부 `error_message`와 운영 metadata는 포함하지
+  않습니다. HTTP 결과는 [API 계약](api/API.md)을 따릅니다.
 
 ### Admin → Auth·UI·Main
 
@@ -221,11 +208,8 @@ from app.admin.router import router as admin_router
 from app.auth.dependencies import require_admin
 ```
 
-- `app/admin/router.py`가 `GET /admin/logs` HTTP use case를 소유하고 `require_admin`·`get_db`
-  dependency와 Admin Service를 연결합니다.
-- Admin Repository는 Auth·Chat ORM model을 직접 사용하는 read-only query를 수행하고, Admin
-  Service는 화면에 허용된 운영 metadata만 projection합니다. Query와 projection field의 상세
-  계약은 [DB schema 계약](db/DB.md)을 따릅니다.
+- `app/admin/router.py`가 `GET /admin/logs`를 소유하며, Admin은 화면에 허용된 운영 metadata만
+  제공합니다. 표시 field는 [DB schema 계약](db/DB.md)을 따릅니다.
 - Admin은 별도 JSON API, 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table, 별도
   역할·권한 table을 제공하지 않습니다. 사용자 역할은 `users.role`을 사용합니다.
 - Main은 `admin_router` 등록만 담당합니다.
@@ -259,15 +243,11 @@ Auth가 제공하는 helper로 session 사용자 ID를 저장하거나 삭제하
 
 ### Chat
 
-Auth dependency가 식별한 `user_id`와 Router가 변환한 질문을 Chat Service에 전달합니다. Chat Service는
-사용자 문맥 조회, OpenAI 호출과 성공·실패 persistence를 조정하고 transaction을 완료합니다. Router는
-그 결과를 HTTP 응답으로 변환하며 UI는 Browser 상태에 맞게 표시합니다.
+인증된 사용자의 질문을 처리해 HTTP 응답으로 반환하며, UI는 Browser 상태에 맞게 표시합니다.
 
 ### 관리자 조회
 
-Admin Router가 Auth의 관리자 dependency를 적용하고 Admin Service를 호출합니다. Admin Service와
-Repository는 허용된 read-only 운영 metadata를 조회하며 UI template은 전달받은 projection만
-표시합니다.
+관리자만 운영 metadata를 조회할 수 있으며 UI template은 허용된 field만 표시합니다.
 
 ## 핵심 제약
 

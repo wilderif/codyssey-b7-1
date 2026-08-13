@@ -82,9 +82,7 @@
 - `is_admin`: `bool`
 - `answer=null`이고 `status=failed`이면 `답변을 생성하지 못했습니다.` 표시
 - 내부 `error_message`와 운영 metadata는 template에 전달하지 않음
-- `chat_exchanges`는 `list_chat_exchange_history()`의 안전한 projection이며 `is_admin`은 Auth가
-  검증한 `AuthenticatedUser.is_admin`입니다. UI Router가 User Repository나 ORM model을 직접
-  조회하지 않습니다.
+- `chat_exchanges`는 안전한 사용자용 projection이며 `is_admin`은 Auth가 검증한 값입니다.
 - Session 값이 없거나 유효하지 않거나 대응 User가 없는 stale session이면 history를 조회하거나
   template을 rendering하지 않고 session을 제거한 뒤 `303 /login`을 반환합니다.
 
@@ -95,9 +93,7 @@
 
 - Template에 전달하는 field는 [DB schema 계약](../db/DB.md#관리자-운영-metadata-조회)의 안전한
   Admin projection을 따릅니다.
-- `app/admin/router.py`가 `require_admin`으로 접근을 검사하고 Admin Service의 projection을
-  `admin_logs.html`의 `items` variable에 전달합니다. Context의 business data는 정확히
-  `{"items": items}`이며 UI는 route와 관리자 데이터 조합을 담당하지 않습니다.
+- Template context의 business data는 정확히 `{"items": items}`입니다.
 - 질문·답변 원문, 내부 `error_message`, `password_hash`와 그 밖의 민감정보는 projection과 화면에서
   제외합니다.
 - 별도 관리자 JSON API, 관리자 수정·삭제 CRUD, 고급 검색·pagination, 별도 운영 log table은
@@ -108,7 +104,7 @@
 
 | Method | 경로 | 인증 | 역할 |
 | --- | --- | --- | --- |
-| `POST` | `/api/chat` | 필수 | 질문 검증, 문맥 구성, OpenAI 호출, 대화 저장 |
+| `POST` | `/api/chat` | 필수 | Pydantic 질문 검증과 AI 답변 생성 |
 | `GET` | `/api/chat-exchanges` | 필수 | 로그인 사용자의 전체 질문·답변을 JSON으로 반환 |
 | `GET` | `/api/chat-exchanges/{chat_exchange_id}` | 필수 | 로그인 사용자의 특정 질문·답변 한 건을 JSON으로 반환 |
 | `GET` | `/health` | 불필요 | process 상태만 확인 |
@@ -173,9 +169,8 @@ Content-Type: application/json
 
 ## 6. 오류 응답
 
-JSON API 오류는 `{"code":"...","detail":"..."}` 형식으로 통일합니다. `code`는
-frontend 분기·자동화 test·운영 추적에 쓰는 안정적인 lower_snake_case 식별자이고, `detail`은
-locale에 따라 변환되는 사용자용 안전 message입니다.
+JSON API 오류는 `{"code":"...","detail":"..."}` 형식으로 통일합니다. `code`는 안정적인
+lower_snake_case 식별자이고, `detail`은 locale에 따라 변환되는 사용자용 안전 message입니다.
 
 | 상태 | 상황 | code | 기본 `ko` detail |
 | --- | --- | --- | --- |
@@ -185,15 +180,9 @@ locale에 따라 변환되는 사용자용 안전 message입니다.
 | `403` | 권한 부족 JSON 요청 | `forbidden` | `접근 권한이 없습니다.` |
 | `404` | 대화 기록 없음 또는 다른 사용자 소유 | `conversation_not_found` | `대화 기록을 찾을 수 없습니다.` |
 | `422` | 필드 누락·자료형·JSON 형식 오류 | `validation_error` | `요청 형식이 올바르지 않습니다.` |
-| `500` | DB 저장 실패 | `db_save_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
-| `500` | 분류되지 않은 내부 오류 | `internal_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
+| `500` | DB 저장·조회 실패를 포함한 내부 오류 | `internal_error` | `서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.` |
 | `502` | OpenAI API 오류 | `openai_api_error` | `AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.` |
 | `504` | OpenAI 요청 timeout | `openai_timeout` | `AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.` |
-
-- 단일 `AppError`와 공통 handler가 프로젝트 정의 오류를 `code`·`detail` 형식으로 변환합니다.
-  오류별 하위 예외 class는 만들지 않습니다.
-- `RequestValidationError`는 전용 handler로 `422 validation_error`로 변환합니다.
-- `HTTPException.detail`에 객체를 넣어 `{"detail":{"code":...}}`처럼 한 번 더 감싸지 않습니다.
 
 ### i18n 오류 message
 
@@ -208,16 +197,9 @@ locale에 따라 변환되는 사용자용 안전 message입니다.
 
 ## 7. Chat 처리 결과의 HTTP 변환
 
-Chat use case와 transaction 책임은 [Architecture](../ARCHITECTURE.md), 저장 record의 상태와 불변식은
-[DB schema 계약](../db/DB.md)을 따릅니다. OpenAI model과 timeout 설정값은
-[실행·배포 계약](../DEPLOYMENT.md)에서 정의합니다.
-
-- 성공 record 저장이 완료된 뒤 `200`을 반환합니다.
-- OpenAI API 오류는 실패 record 저장 후 `502 openai_api_error`를 반환합니다.
-- OpenAI 요청 timeout은 실패 record 저장 후 `504 openai_timeout`을 반환합니다.
-- 분류되지 않은 내부 오류는 `500 internal_error`로 변환합니다.
-- DB 저장 자체가 실패하면 transaction을 rollback하고 `500 db_save_error`를 반환합니다. 같은 DB에
-  실패 record를 추가로 저장하지 않습니다.
+저장 record의 상태와 불변식은 [DB schema 계약](../db/DB.md), OpenAI model과 timeout 설정값은
+[실행·배포 계약](../DEPLOYMENT.md)을 따릅니다. 처리 결과의 HTTP status와 오류 형식은 위 오류
+응답 표를 따릅니다.
 
 ## 8. Health API
 
